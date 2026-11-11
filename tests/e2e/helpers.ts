@@ -102,3 +102,44 @@ export async function openToolPanel(page: Page, tool: RegExp | string): Promise<
 export async function closePanel(page: Page): Promise<void> {
   await page.keyboard.press('Escape');
 }
+
+/** Stylet posé / déplacé / relevé séparément (pour les tests de maintien). */
+export async function penDown(cdp: CDPSession, x: number, y: number, force = 0.6): Promise<void> {
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, buttons: 1, clickCount: 1, pointerType: 'pen', button: 'left', force });
+}
+
+export async function penMove(cdp: CDPSession, x: number, y: number, force = 0.6): Promise<void> {
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, buttons: 1, pointerType: 'pen', button: 'left', force });
+}
+
+export async function penUp(cdp: CDPSession, x: number, y: number): Promise<void> {
+  await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, buttons: 0, clickCount: 1, pointerType: 'pen', button: 'left', force: 0 });
+}
+
+/** Points du dernier trait de la page n, en unités page : [[x, y], …]. */
+export async function lastStrokePoints(page: Page, n = 0): Promise<[number, number][]> {
+  return page.evaluate((i) => {
+    const s = window.__calame!.session;
+    const list = s.getStrokes(s.notebook.pageIds[i]);
+    const st = list[list.length - 1];
+    const out: [number, number][] = [];
+    for (let k = 0; k < st.points.length; k += 5) out.push([st.points[k], st.points[k + 1]]);
+    return out;
+  }, n);
+}
+
+/** Distance d'un point à un segment. */
+export function distToSegment(p: [number, number], a: [number, number], b: [number, number]): number {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const l2 = dx * dx + dy * dy;
+  const t = l2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2)) : 0;
+  return Math.hypot(a[0] + t * dx - p[0], a[1] + t * dy - p[1]);
+}
+
+/** Distance d'un point à une polyligne. */
+export function distToPolyline(p: [number, number], poly: [number, number][]): number {
+  let d = Infinity;
+  for (let i = 1; i < poly.length; i++) d = Math.min(d, distToSegment(p, poly[i - 1], poly[i]));
+  return poly.length === 1 ? Math.hypot(p[0] - poly[0][0], p[1] - poly[0][1]) : d;
+}

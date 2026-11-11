@@ -59,6 +59,27 @@ function fountainPressures(p: ArrayLike<number>, style: StrokeStyle): number[] {
 }
 
 /**
+ * perfect-freehand ignore les points situés à moins de 3 unités de la fin du trait (seuil fixe,
+ * indépendant de la taille). Un petit crochet final (fréquent en écriture) tordait alors le contour :
+ * étranglement puis « point » rond, très visible en zoom. On calcule donc le contour dans un repère
+ * agrandi FINE fois (seuil ramené à 3/FINE unité), puis on le ramène à l'échelle de la page.
+ * Les données du trait ne changent pas.
+ */
+const FINE = 8;
+type FreehandOptions = NonNullable<Parameters<typeof getStroke>[1]>;
+
+function freehand(pts: number[][], o: FreehandOptions): number[][] {
+  const scaled = pts.map((p) => [p[0] * FINE, p[1] * FINE, p[2]]);
+  const k = (t: FreehandOptions['start']) => (t && typeof t.taper === 'number' ? { ...t, taper: t.taper * FINE } : t);
+  const out = getStroke(scaled, { ...o, size: (o.size ?? 16) * FINE, start: k(o.start), end: k(o.end) });
+  for (const p of out) {
+    p[0] /= FINE;
+    p[1] /= FINE;
+  }
+  return out;
+}
+
+/**
  * Calcule le contour (polygone) d'un trait.
  * `complete` = false pendant le tracé : l'extrémité n'est pas « fermée »,
  * ce qui évite un effet de goutte à la pointe du stylet.
@@ -77,15 +98,15 @@ export function strokeOutline(s: OutlineInput, complete: boolean): number[][] {
   const base = { size, smoothing: 0.5, streamline: s.style.streamline, last: complete };
   switch (s.tool) {
     case 'highlighter':
-      return getStroke(pts, { ...base, thinning: 0, simulatePressure: false, start: { cap: true, taper: 0 }, end: { cap: true, taper: 0 } });
+      return freehand(pts, { ...base, thinning: 0, simulatePressure: false, start: { cap: true, taper: 0 }, end: { cap: true, taper: 0 } });
     case 'fineliner':
-      return getStroke(pts, { ...base, thinning: 0, simulatePressure: false, start: { cap: true, taper: 0 }, end: { cap: true, taper: 0 } });
+      return freehand(pts, { ...base, thinning: 0, simulatePressure: false, start: { cap: true, taper: 0 }, end: { cap: true, taper: 0 } });
     case 'marker':
-      return getStroke(pts, { ...base, thinning: 0, simulatePressure: false, start: { cap: false, taper: 0 }, end: { cap: false, taper: 0 } });
+      return freehand(pts, { ...base, thinning: 0, simulatePressure: false, start: { cap: false, taper: 0 }, end: { cap: false, taper: 0 } });
     case 'fountain':
-      return getStroke(pts, { ...base, thinning: s.style.thinning, simulatePressure: false, start: { cap: true }, end: { cap: true } });
+      return freehand(pts, { ...base, thinning: s.style.thinning, simulatePressure: false, start: { cap: true }, end: { cap: true } });
     case 'brush':
-      return getStroke(pts, {
+      return freehand(pts, {
         ...base,
         thinning: s.style.thinning,
         simulatePressure: !s.style.realPressure,
@@ -94,7 +115,7 @@ export function strokeOutline(s: OutlineInput, complete: boolean): number[][] {
         end: { cap: true, taper: complete ? Math.min(100, size * 4) : 0 },
       });
     case 'pencil':
-      return getStroke(pts, {
+      return freehand(pts, {
         ...base,
         thinning: s.style.thinning,
         simulatePressure: !s.style.realPressure,
@@ -102,9 +123,9 @@ export function strokeOutline(s: OutlineInput, complete: boolean): number[][] {
         end: { cap: true, taper: complete ? Math.min(12, size * 2) : 0 },
       });
     default: {
-      // Traits antérieurs au 12/11/2026 (sans `smoothing`) : rendu inchangé.
+      // Traits créés avant le filtre de saisie (sans `smoothing`) : rendu d'origine conservé.
       const legacy = s.style.smoothing === undefined;
-      return getStroke(pts, {
+      return freehand(pts, {
         ...base,
         // Sans pression matérielle (doigt, souris), épaisseur stable plutôt que dépendante de la vitesse.
         thinning: legacy || s.style.realPressure ? s.style.thinning : 0,

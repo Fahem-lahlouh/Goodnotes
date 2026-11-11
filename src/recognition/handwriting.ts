@@ -162,7 +162,9 @@ async function recognizeGoogle(strokes: Stroke[], key: string, signal?: AbortSig
         requests: [{ image: { content: b64 }, features: [{ type: 'DOCUMENT_TEXT_DETECTION' }], imageContext: { languageHints: ['fr'] } }],
       }),
       signal,
-      referrerPolicy: 'no-referrer',
+      // Seule l'origine publique du site est transmise (jamais le chemin) : elle permet de restreindre
+      // la clé Google à ce site, ce qui la rend inutilisable ailleurs si elle fuyait.
+      referrerPolicy: 'strict-origin',
       credentials: 'omit',
     });
   } catch (e) {

@@ -46,3 +46,32 @@ describe('outils d’écriture', () => {
     expect(strokeStyleFrom('fountain', s, 0.4, true).nibAngle).toBeCloseTo(Math.PI / 4);
   });
 });
+
+describe('Fin de trait avec petit crochet', () => {
+  it('le contour couvre toute la fin du trait (pas d’étranglement ni de « point » détaché)', () => {
+    // Fin réelle d'un mot : descente, rebroussement, puis remontée de ~2 unités.
+    const tail = [[160, 95], [163.3, 99.5], [166.61, 104.17], [167.71, 105.48], [168.9, 107.28], [170.14, 109.49], [171.44, 111.09], [172.68, 110.19], [173.38, 109.69], [173.46, 109.63]];
+    const pts = Float32Array.from(tail.flatMap(([x, y], i) => [x, y, 0.5, i * 4, 0]));
+    const o = strokeOutline({ tool: 'pen', width: 2.2, style: strokeStyleFrom('pen', DEFAULT_SETTINGS, 0.35, true), points: pts }, true);
+    // Règle de remplissage « non nulle », comme ctx.fill() dans l'application.
+    const inside = (x: number, y: number) => {
+      let w = 0;
+      for (let i = 0; i < o.length; i++) {
+        const [ax, ay] = o[i];
+        const [bx, by] = o[(i + 1) % o.length];
+        const cross = (bx - ax) * (y - ay) - (x - ax) * (by - ay);
+        if (ay <= y && by > y && cross > 0) w++;
+        else if (ay > y && by <= y && cross < 0) w--;
+      }
+      return w !== 0;
+    };
+    // Chaque point de la ligne centrale est couvert par l'encre, avec un disque de 0,4 unité autour
+    // (épaisseur 2,2) : pas d'étranglement ni de « point » détaché en fin de trait.
+    for (const [x, y] of tail) {
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2;
+        expect(inside(x + 0.4 * Math.cos(a), y + 0.4 * Math.sin(a)), `${x},${y} @${k}`).toBe(true);
+      }
+    }
+  });
+});

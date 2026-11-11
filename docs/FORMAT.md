@@ -24,10 +24,12 @@ Base séparée `calame-safety` : copies de sécurité automatiques (JSON `.calam
 {
   id: string;            // UUID v4
   pageId: string;
-  tool: 'pen' | 'fountain' | 'brush' | 'pencil' | 'highlighter';   // 'pen' = stylo à bille
+  tool: 'pen' | 'fineliner' | 'fountain' | 'brush' | 'pencil' | 'marker' | 'highlighter';   // 'pen' = stylo à bille
   color: '#rrggbb';
   width: number;         // épaisseur de base (unités page)
-  style: { thinning, streamline, tilt, realPressure, nibAngle? };  // paramètres de rendu figés
+  style: { thinning, streamline, tilt, realPressure, nibAngle?, smoothing? };  // paramètres de rendu figés
+  // smoothing (depuis le 2ᵉ lot du 11/11/2026) : lissage appliqué à la SAISIE ; présent ⇒ points déjà filtrés, streamline = 0.
+  // Absent (traits plus anciens) ⇒ rendu d'origine (streamline, pression simulée sans stylet).
   points: Float32Array;  // 5 valeurs par point : x, y, pression 0..1, t (ms depuis le début), inclinaison 0..1
   bbox: [minX, minY, maxX, maxY];
   order: number;         // empilement

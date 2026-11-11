@@ -40,6 +40,21 @@ Reporter les résultats dans `docs/TESTS.md` (section « Validation iPad »).
 | 19 | Clavier externe : P/H/E/S/T, ⌘Z, ⇧⌘Z, ← → | Raccourcis actifs |
 | 20 | Split View / Slide Over, portrait et paysage | Mise en page lisible, écriture correcte |
 
+### Écriture, formes, zoom, conversion (2ᵉ lot du 11/11/2026)
+
+| # | Scénario | Attendu |
+| --- | --- | --- |
+| 21 | Écrire une phrase rapidement puis lentement, au bille puis au feutre fin | L'encre colle à la pointe, angles des lettres nets, aucun « saut » ni point détaché au lever |
+| 22 | Écrire très légèrement le premier trait d'une lettre | Pas de goutte au départ |
+| 23 | Les 6 stylos + surligneur, en changeant épaisseur, couleur, lissage | Rendus nettement différents ; réglages mémorisés par stylo |
+| 24 | Gommer (partielle) 3 traits, puis toucher Annuler ; recommencer 10 fois en alternant gomme / sélection / changement de page | Chaque Annuler agit, sans bouton grisé à tort ; Rétablir rejoue tout |
+| 25 | Glisser un geste système (bord de l'écran) pendant un trait, puis Annuler | Le trait est conservé ou annulé proprement ; rien ne reste bloqué |
+| 26 | Tracer une ligne et garder le Pencil immobile ~½ s, déplacer l'extrémité, relever | Droite nette ; « Garder le tracé libre » rétablit le tracé ; Annuler aussi |
+| 27 | Idem pour un cercle et un rectangle ; écrire normalement en marquant des pauses | Formes reconnues ; l'écriture ordinaire n'est jamais transformée (sinon augmenter le délai) |
+| 28 | Fenêtre de zoom : écrire une ligne entière avec l'avance automatique, puis « Ligne » | Texte à la bonne taille dans le cadre, sans doublon ; le cadre avance puis revient à la marge |
+| 29 | Dans la fenêtre : gomme, Annuler, pincer, glisser au doigt ; déplacer et redimensionner le cadre | Tout fonctionne ; aucun trait parasite lors du déplacement du cadre |
+| 30 | Sélectionner une phrase → Convertir en texte → écrire au Pencil dans le champ (Scribble), corriger, Remplacer ; Annuler | Texte éditable à la place des traits ; Annuler restaure l'écriture |
+
 Les points 1, 3, 5 et 7 conditionnent la suite du projet : s'ils ne sont pas satisfaisants, ils seront traités avant toute
 nouvelle fonctionnalité.
 

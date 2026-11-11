@@ -6,27 +6,30 @@
 L'inventaire détaillé des fonctions de Goodnotes (observées sur vos captures, documentées, propositions) et leurs tests est
 dans [AUDIT.md](AUDIT.md). Le détail des corrections du 11/11/2026 est dans [CORRECTIONS.md](CORRECTIONS.md).
 
-Dernière mise à jour : 11/11/2026.
+Dernière mise à jour : 11/11/2026 (2ᵉ lot : écriture, voir [ECRITURE.md](ECRITURE.md)).
 
 ## Écriture
 
 | Fonctionnalité | Équivalent Calame | Limites | État |
 | --- | --- | --- | --- |
 | Écriture Apple Pencil, pression | Pointer Events `pen`, pression par outil × sensibilité | Latence réelle à mesurer | 🟡 (✅ simulé) |
+| Précision du trait | Filtre One Euro à la saisie (indépendant de la fréquence), encre jusqu'à la pointe, aucun saut au lever | Sensation à valider | 🟡 (✅ mesuré) |
 | Inclinaison | `altitudeAngle` ou `tiltX/Y`, effet réglable | `altitudeAngle` : Safari ≥ 18.2 | 🟡 |
-| Outils : bille, plume, pinceau, crayon, surligneur | Rendus distincts, réglages mémorisés par outil | — | ✅ |
+| Outils : bille, feutre fin, plume, pinceau, crayon, marqueur, surligneur | Rendus distincts, couleur / épaisseur / lissage mémorisés par outil | — | ✅ |
 | Épaisseur, palette, couleurs personnalisées, lissage | Panneau de l'outil, aperçu exact | — | ✅ |
 | Favoris d'outils | 8 favoris dans la barre | — | ✅ |
 | Doigt : « stylet uniquement » / « doigt et stylet » | Bouton visible + réglage | — | ✅ (iPad 🟡) |
 | Rejet de paume | Doigt ignoré pendant un tracé au stylet ; heuristique optionnelle | Pas d'équivalent natif | 🟡 |
 | Gomme trait entier / partielle, taille réglable | Diamètre constant à l'écran, aperçu exact | — | ✅ |
-| Annuler / rétablir | Par document, page affichée avant d'annuler, 500 étapes | Non conservé après fermeture | ✅ |
+| Annuler / rétablir | Par document, page affichée avant d'annuler, 500 étapes ; geste dont la fin est perdue récupéré ; libellé de l'action | Non conservé après fermeture | ✅ |
 | Lasso, rectangle, carré ; règle explicite ; filtres | Géométrie réelle | Une page à la fois | ✅ |
 | Déplacer, redimensionner, dupliquer, copier/coller, couleur, épaisseur | Poignées aux 4 coins | Pas de rotation | ✅ |
 | Blocs de texte (police, taille, G/I/S, couleur, alignement) | Outil Texte | Mise en forme par bloc | ✅ |
 | Images (insertion, déplacement, redimensionnement) | Réduites à 2048 px au plus | Pas de recadrage | ✅ |
 | Zoom / déplacement deux doigts, netteté | Rendu vectoriel | — | ✅ (iPad 🟡) |
-| Reconnaissance de formes, d'écriture | — | — | ⬜ |
+| Forme nette par maintien (droite, cercle, ellipse, rectangle) | Délai réglable, « garder le tracé libre », annulable | Ellipse alignée sur les axes | ✅ (iPad 🟡) |
+| Fenêtre de zoom d'écriture | Cadre déplaçable et redimensionnable, avance automatique, retour à la ligne, grossissement ×1,25–×8 | — | ✅ (iPad 🟡) |
+| Conversion manuscrit → texte | Vérification avant remplacement ; saisie / Scribble (local), navigateur (local), Google Vision (clé personnelle, optionnel) | Qualité non évaluée ; voir [RECONNAISSANCE.md](RECONNAISSANCE.md) | 🔶 |
 
 ## Pages et navigation
 

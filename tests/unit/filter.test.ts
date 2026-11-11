@@ -78,6 +78,34 @@ describe('Filtre One Euro du tracé', () => {
     expect(filtErr / n).toBeLessThan((rawErr / n) * 0.6);
   });
 
+  it('écriture réaliste à 240 Hz (ralentissement dans les angles) : angles conservés à 0,3 unité près', () => {
+    // Zigzag de « lettres » de 20 unités (≈ 5 mm), 90 ms par segment, profil minimum jerk.
+    const corners: [number, number][] = Array.from({ length: 7 }, (_, i) => [i * 14, i % 2 ? 14 : 0]);
+    const f = new OneEuro2D(filterParams(0.35, 'pen'));
+    const out: [number, number][] = [];
+    let t = 0;
+    for (let s = 0; s < corners.length - 1; s++) {
+      const per = Math.round(0.09 * 240);
+      for (let k = s ? 1 : 0; k <= per; k++) {
+        const u = k / per;
+        const e = 10 * u ** 3 - 15 * u ** 4 + 6 * u ** 5;
+        out.push(f.filter(corners[s][0] + (corners[s + 1][0] - corners[s][0]) * e, corners[s][1] + (corners[s + 1][1] - corners[s][1]) * e, t));
+        t += 1000 / 240;
+      }
+    }
+    const seg = (p: [number, number], a: [number, number], b: [number, number]) => {
+      const dx = b[0] - a[0];
+      const dy = b[1] - a[1];
+      const u = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+      return Math.hypot(a[0] + u * dx - p[0], a[1] + u * dy - p[1]);
+    };
+    for (const c of corners.slice(0, -1)) {
+      let d = Infinity;
+      for (let i = 1; i < out.length; i++) d = Math.min(d, seg(c, out[i - 1], out[i]));
+      expect(d).toBeLessThan(0.3);
+    }
+  });
+
   it('lissage plus fort au doigt qu’au stylet, pour un même réglage', () => {
     const pen = filterParams(0.3, 'pen');
     const touch = filterParams(0.3, 'touch');

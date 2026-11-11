@@ -1445,6 +1445,8 @@ export class InkEngine {
   /** `lost` : capture perdue sans pointerup (coordonnées non fiables : pas de dernier point). */
   private onUp(e: PointerEvent, surf: Surface, cancelled: boolean, lost = false): void {
     if (this.ignored.delete(e.pointerId)) return;
+    // Stylet relevé : plus d'aperçu de pointe (il revient au prochain survol réel, ex. Pencil 2e gén. / Pro).
+    if (e.pointerType === 'pen') for (const s of this.surfaces()) s.hover = null;
     const a = this.interaction;
 
     if (e.pointerType === 'touch' && this.touches.has(e.pointerId)) {

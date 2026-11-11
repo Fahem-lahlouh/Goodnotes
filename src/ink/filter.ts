@@ -27,7 +27,9 @@ export function filterParams(smoothing: number, pointerType: string): FilterPara
   return {
     minCutoff: 14 - 12.5 * s, // 14 Hz (brut) → 1,5 Hz (très lissé)
     beta: 0.25 - 0.21 * s, // 0,25 → 0,04
-    dCutoff: 1,
+    // Estimation de vitesse réactive (8 Hz) : le lissage se relâche dès que le geste accélère,
+    // ce qui préserve les angles (1 Hz, valeur d'origine du filtre, coupait les angles rapides).
+    dCutoff: 8,
   };
 }
 
