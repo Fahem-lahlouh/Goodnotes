@@ -1,5 +1,6 @@
 import { getStroke } from 'perfect-freehand';
 import { POINT_STRIDE, type InkTool, type Stroke, type StrokeStyle } from '../model/types';
+import { DEFAULT_RES, smoothForRender } from './smooth';
 
 /**
  * Rendu des traits manuscrits. Chaque outil a un rendu réellement distinct :
@@ -85,7 +86,8 @@ function freehand(pts: number[][], o: FreehandOptions): number[][] {
  * ce qui évite un effet de goutte à la pointe du stylet.
  */
 export function strokeOutline(s: OutlineInput, complete: boolean): number[][] {
-  const p = s.points;
+  // Lissage spatial (rendu seulement) : efface l'escalier des coordonnées arrondies au pixel.
+  const p = smoothForRender(s.points, s.style.res ?? DEFAULT_RES);
   const n = Math.floor(p.length / POINT_STRIDE);
   const pts: number[][] = new Array(n);
   const fp = s.tool === 'fountain' ? fountainPressures(p, s.style) : null;
@@ -223,13 +225,21 @@ function pencilPattern(ctx: CanvasRenderingContext2D, color: string): CanvasPatt
   if (!pat) {
     const p = ctx.createPattern(grain(color) as CanvasImageSource, 'repeat');
     if (!p) return color;
-    // Grain fin : un « pixel » de bruit = 0,5 unité page.
-    if (typeof DOMMatrix !== 'undefined' && p.setTransform) p.setTransform(new DOMMatrix().scale(0.5));
     pat = p;
     m.set(color, pat);
   }
+  // Grain fin à tout zoom : un « grain » ≈ 1,3 pixel physique (et non une taille fixe sur la page,
+  // qui donnait de gros pavés flous en zoom). Le motif reste ancré à la page lors d'un déplacement.
+  if (typeof DOMMatrix !== 'undefined' && pat.setTransform) {
+    const t = ctx.getTransform();
+    const k = Math.hypot(t.a, t.b) || 1;
+    pat.setTransform(new DOMMatrix().scale(GRAIN_PX / k));
+  }
   return pat;
 }
+
+/** Taille d'un grain du crayon, en pixels physiques. */
+const GRAIN_PX = 1.3;
 
 // ---------- Remplissage ----------
 

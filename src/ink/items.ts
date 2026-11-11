@@ -164,6 +164,17 @@ export function getImage(blobId: string): Decoded | null {
   return null;
 }
 
+/** Attend que les images données soient décodées (ou en erreur), au plus `timeoutMs`. */
+export async function ensureImages(blobIds: string[], timeoutMs = 5000): Promise<void> {
+  const pending = () => blobIds.filter((id) => {
+    getImage(id);
+    const v = images.get(id);
+    return v === 'loading' || v === undefined;
+  });
+  const t0 = Date.now();
+  while (pending().length && Date.now() - t0 < timeoutMs) await new Promise((r) => setTimeout(r, 30));
+}
+
 export function primeImage(blobId: string, img: Decoded): void {
   images.set(blobId, img);
 }

@@ -1,6 +1,6 @@
 import { newId, nextOrder } from '../model/ids';
 import type { Change, NotebookSession, SessionEvent } from '../model/session';
-import { POINT_STRIDE, type ImageItem, type InkTool, type Page, type PageItem, type Stroke, type TextItem, type TextStyle } from '../model/types';
+import { POINT_STRIDE, type ImageItem, type InkTool, type Page, type PageItem, type Stroke, type StrokeStyle, type TextItem, type TextStyle } from '../model/types';
 import { OneEuro2D, PressureSmoother, filterParams } from './filter';
 import { bboxIntersects, bboxUnion, computeBBox, eraseFromPoints, strokeHitsCircle, strokeMaxRadius, transformPoints, type BBox } from './geometry';
 import { coalesced, predicted, sampleFrom, type Sample } from './input';
@@ -9,6 +9,7 @@ import { computeLayout, renderPageContent, type PageRect } from './pageRender';
 import { areaFromPolygon, areaFromRect, itemBBox, itemSelected, squareFrom, strokeSelected, transformItem, type Area } from './selection';
 import { DEFAULT_SETTINGS, DEFAULT_TEXT_STYLE, DEFAULT_TOOL_STYLES, strokeStyleFrom, type InkSettings, type InkStyle, type Tool, type ToolStyles } from './settings';
 import { meanPressure, recognizeShape, shapeLabel, shapePoints, type Shape } from './shapes';
+import { DEFAULT_RES } from './smooth';
 import { drawStrokes, fillOutline, haloStroke, outlineToPath, strokeOutline, strokePath } from './strokeRender';
 import { Viewport } from './viewport';
 
@@ -70,6 +71,15 @@ class Surface {
   readonly bctx: CanvasRenderingContext2D;
   readonly lctx: CanvasRenderingContext2D;
   dpr = 1;
+  /**
+   * Décalage (pixels physiques, 0 ≤ ox, oy < 1) entre l'hôte et la grille de pixels de l'écran.
+   * Le canvas est placé sur un pixel physique entier et le dessin est décalé d'autant : chaque
+   * pixel du canvas correspond exactement à un pixel de l'écran (aucun rééchantillonnage flou).
+   */
+  ox = 0;
+  oy = 0;
+  private cw = 0;
+  private ch = 0;
   origin: [number, number] = [0, 0];
   renderedView = { scale: 1, tx: 0, ty: 0 };
   cssTransformed = false;
@@ -95,34 +105,57 @@ class Surface {
     this.lctx = this.live.getContext('2d', { desynchronized: true } as CanvasRenderingContext2DSettings)!;
   }
 
+  /** Position de l'hôte (coordonnées des pointeurs) ; réaligne les canvas si elle a bougé d'une fraction de pixel. */
   updateOrigin(): void {
     const r = this.host.getBoundingClientRect();
     this.origin = [r.left, r.top];
+    const fx = frac(r.left * this.dpr);
+    const fy = frac(r.top * this.dpr);
+    if (Math.abs(fx - this.ox) > 0.01 || Math.abs(fy - this.oy) > 0.01) this.resize();
   }
 
-  /** Ajuste les canvas à la taille de l'hôte ; renvoie vrai si la taille a changé. */
+  /**
+   * Ajuste les canvas à l'hôte, au pixel physique près : taille du canvas = taille affichée en
+   * pixels physiques (y compris pour une densité non entière), coin supérieur gauche sur un pixel
+   * physique entier. Renvoie vrai si quelque chose a changé (rendu complet nécessaire).
+   */
   resize(): boolean {
     const r = this.host.getBoundingClientRect();
-    const w = Math.max(1, Math.round(r.width));
-    const h = Math.max(1, Math.round(r.height));
-    this.updateOrigin();
+    this.origin = [r.left, r.top];
+    const w = Math.max(1, r.width);
+    const h = Math.max(1, r.height);
     // Plafonne la surface pour rester sous les limites mémoire canvas d'iOS.
     const maxArea = this.kind === 'main' ? 16_000_000 : 8_000_000;
     let dpr = window.devicePixelRatio || 1;
     if (w * h * dpr * dpr > maxArea) dpr = Math.sqrt(maxArea / (w * h));
-    if (w === this.vp.width && h === this.vp.height && dpr === this.dpr) return false;
+    const ox = frac(r.left * dpr);
+    const oy = frac(r.top * dpr);
+    const cw = Math.max(1, Math.ceil(w * dpr + ox - 1e-3));
+    const ch = Math.max(1, Math.ceil(h * dpr + oy - 1e-3));
+    if (cw === this.cw && ch === this.ch && dpr === this.dpr && Math.abs(ox - this.ox) < 1e-3 && Math.abs(oy - this.oy) < 1e-3 && w === this.vp.width && h === this.vp.height) return false;
     this.dpr = dpr;
+    this.ox = ox;
+    this.oy = oy;
+    this.cw = cw;
+    this.ch = ch;
     for (const c of [this.base, this.live]) {
-      c.width = Math.round(w * dpr);
-      c.height = Math.round(h * dpr);
-      c.style.width = `${w}px`;
-      c.style.height = `${h}px`;
+      if (c.width !== cw) c.width = cw;
+      if (c.height !== ch) c.height = ch;
+      c.style.width = `${cw / dpr}px`;
+      c.style.height = `${ch / dpr}px`;
+      c.style.left = `${-ox / dpr}px`;
+      c.style.top = `${-oy / dpr}px`;
     }
     this.vp.width = w;
     this.vp.height = h;
     this.needFull = true;
     this.needLive = true;
     return true;
+  }
+
+  /** Transformation « écran » (px CSS relatifs à l'hôte) du canvas. */
+  screenTransform(ctx: CanvasRenderingContext2D): void {
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, this.ox, this.oy);
   }
 
   destroy(): void {
@@ -162,6 +195,9 @@ interface DrawI extends Base {
   shapeTool: boolean;
   /** Tracé le long de la règle : droite (unités page) sur laquelle les points sont projetés. */
   snap: { ox: number; oy: number; dx: number; dy: number } | null;
+  /** Échantillons reçus / dont les coordonnées ont une partie décimale (détection de l'arrondi au pixel). */
+  samples: number;
+  fractional: number;
 }
 interface LaserI extends Base {
   kind: 'laser';
@@ -294,6 +330,8 @@ export interface ShapeCommit {
   pageId: string;
   label: string;
   original: Float32Array;
+  /** Résolution de saisie du tracé libre d'origine (lissage du rendu). */
+  res?: number;
 }
 
 export interface EngineCallbacks {
@@ -1351,6 +1389,8 @@ export class InkEngine {
         shapePressure: 0.5,
         shapeTool: tool === 'shape',
         snap: surf.kind === 'main' ? this.rulerSnap(s.x, s.y, page, ink.width) : null,
+        samples: 0,
+        fractional: 0,
       };
       this.interaction = d;
       this.pushSample(d, s);
@@ -1411,6 +1451,8 @@ export class InkEngine {
    * léger de la pression. L'échantillon brut est gardé pour que l'encre affichée atteigne la pointe.
    */
   private pushSample(a: DrawI, s: Sample): void {
+    a.samples++;
+    if (s.fractional) a.fractional++;
     const [wx, wy] = a.surf.vp.toWorld(s.x, s.y);
     let x = wx - a.page.x;
     let y = wy - a.page.y;
@@ -1476,7 +1518,7 @@ export class InkEngine {
   revertShape(c: ShapeCommit): boolean {
     const s = this.session.getStroke(c.pageId, c.strokeId);
     if (!s) return false;
-    const after: Stroke = { ...s, points: c.original, bbox: computeBBox(c.original, strokeMaxRadius(s)) };
+    const after: Stroke = { ...s, style: { ...s.style, res: c.res ?? DEFAULT_RES }, points: c.original, bbox: computeBBox(c.original, strokeMaxRadius(s)) };
     return this.session.apply([{ kind: 'stroke', id: s.id, pageId: s.pageId, before: s, after }], 'Tracé à main levée');
   }
 
@@ -2272,12 +2314,23 @@ export class InkEngine {
 
   // ---------- Trait ----------
 
+  /**
+   * Style du trait en cours, avec la résolution de saisie : taille d'un pixel de saisie en unités
+   * page (1 px CSS si le navigateur arrondit les coordonnées, comme Safari ; un tiers sinon).
+   * Les formes nettes ne sont pas lissées.
+   */
+  private drawStyle(a: DrawI): StrokeStyle {
+    const style = strokeStyleFrom(a.tool, this.settings, a.ink.smoothing, a.pointerType === 'pen');
+    const rounded = a.samples >= 3 && a.fractional / a.samples < 0.2;
+    style.res = a.shape ? 0 : Math.round(((rounded ? 1 : 0.35) / a.surf.vp.scale) * 1000) / 1000;
+    return style;
+  }
+
   private commitStroke(a: DrawI): void {
     const data = this.liveData(a, false);
     if (data.length < POINT_STRIDE) return;
     const points = Float32Array.from(data);
-    const realPressure = a.pointerType === 'pen';
-    const base = { tool: a.tool, width: a.ink.width, style: strokeStyleFrom(a.tool, this.settings, a.ink.smoothing, realPressure) };
+    const base = { tool: a.tool, width: a.ink.width, style: this.drawStyle(a) };
     const stroke: Stroke = {
       id: newId(),
       pageId: a.page.page.id,
@@ -2294,7 +2347,7 @@ export class InkEngine {
     if (!ok) return;
     if (a.shape && a.orig && !a.shapeTool) {
       this.cb.onShapeHint?.(null);
-      this.cb.onShapeCommitted?.({ strokeId: stroke.id, pageId: stroke.pageId, label: shapeLabel(a.shape), original: Float32Array.from(a.orig) });
+      this.cb.onShapeCommitted?.({ strokeId: stroke.id, pageId: stroke.pageId, label: shapeLabel(a.shape), original: Float32Array.from(a.orig), res: this.drawStyle({ ...a, shape: null }).res });
     }
     // Fenêtre de zoom : avance automatique quand on écrit près du bord droit du cadre.
     if (a.surf.kind === 'zoom' && this.settings.zoomAutoAdvance && this.zoomFrame && this.zoomFrame.pageId === stroke.pageId && a.tool !== 'highlighter') {
@@ -2465,7 +2518,9 @@ export class InkEngine {
   private transformStroke(s: Stroke, t: { k: number; dx: number; dy: number }): Stroke {
     const points = transformPoints(s.points, t.k, t.dx, t.dy);
     const width = s.width * t.k;
-    return { ...s, points, width, bbox: computeBBox(points, strokeMaxRadius({ ...s, width })) };
+    // La résolution de saisie suit l'échelle (sinon le lissage serait trop fort ou trop faible).
+    const style = s.style.res ? { ...s.style, res: s.style.res * t.k } : s.style;
+    return { ...s, style, points, width, bbox: computeBBox(points, strokeMaxRadius({ ...s, width })) };
   }
 
   private finishTransform(a: TransformI, cancelled: boolean): void {
@@ -2757,8 +2812,11 @@ export class InkEngine {
     const m = this.main;
     const r = m.renderedView;
     const k = m.vp.scale / r.scale;
-    const tx = m.vp.tx - r.tx * k;
-    const ty = m.vp.ty - r.ty * k;
+    // Le canvas est décalé de (ox, oy) px physiques : compensation pour garder le contenu en place.
+    const dx = m.ox / m.dpr;
+    const dy = m.oy / m.dpr;
+    const tx = m.vp.tx - r.tx * k + dx * (1 - k);
+    const ty = m.vp.ty - r.ty * k + dy * (1 - k);
     m.base.style.transformOrigin = '0 0';
     m.base.style.transform = `translate(${tx}px, ${ty}px) scale(${k})`;
     m.cssTransformed = true;
@@ -2850,7 +2908,7 @@ export class InkEngine {
 
   private pageTransform(ctx: CanvasRenderingContext2D, r: PageRect, s: Surface): void {
     const k = s.vp.scale * s.dpr;
-    ctx.setTransform(k, 0, 0, k, (s.vp.tx + r.x * s.vp.scale) * s.dpr, (s.vp.ty + r.y * s.vp.scale) * s.dpr);
+    ctx.setTransform(k, 0, 0, k, (s.vp.tx + r.x * s.vp.scale) * s.dpr + s.ox, (s.vp.ty + r.y * s.vp.scale) * s.dpr + s.oy);
   }
 
   private renderFull(s: Surface): void {
@@ -2905,12 +2963,11 @@ export class InkEngine {
     ctx.clearRect(0, 0, sf.live.width, sf.live.height);
     const a = this.interaction;
     const scale = sf.vp.scale;
-    const d = sf.dpr;
 
     if (a?.kind === 'draw') {
       // Même calcul que le trait enregistré : aucun « saut » au lever du stylet.
       const data = this.liveData(a, true);
-      const outline = strokeOutline({ tool: a.tool, width: a.ink.width, style: strokeStyleFrom(a.tool, this.settings, a.ink.smoothing, a.pointerType === 'pen'), points: data }, !!a.shape);
+      const outline = strokeOutline({ tool: a.tool, width: a.ink.width, style: this.drawStyle(a), points: data }, !!a.shape);
       this.pageTransform(ctx, a.page, sf);
       ctx.save();
       ctx.beginPath();
@@ -2974,7 +3031,7 @@ export class InkEngine {
       }
       const rect = this.selectionScreenRect(sf);
       if (rect) {
-        ctx.setTransform(d, 0, 0, d, 0, 0);
+        sf.screenTransform(ctx);
         const pad = 8;
         ctx.setLineDash([5, 4]);
         ctx.lineWidth = 1.5;
@@ -3000,7 +3057,7 @@ export class InkEngine {
 
     // Fenêtre de zoom : cadre sur la page principale, zone d'avance automatique dans la fenêtre.
     if (this.zoom && this.zoomFrame) {
-      ctx.setTransform(d, 0, 0, d, 0, 0);
+      sf.screenTransform(ctx);
       if (sf.kind === 'main') {
         const fr = this.frameScreenRect();
         if (fr) {
@@ -3048,7 +3105,7 @@ export class InkEngine {
     // Curseur : gomme (cercle de diamètre exact) ou aperçu de la pointe au survol.
     const hover = sf.hover;
     if (hover && (a?.kind === 'erase' ? a.surf === sf : !a)) {
-      ctx.setTransform(d, 0, 0, d, 0, 0);
+      sf.screenTransform(ctx);
       ctx.beginPath();
       if (this.tool === 'eraser' || a?.kind === 'erase') {
         ctx.arc(hover.x, hover.y, this.settings.eraserSize / 2, 0, Math.PI * 2);
@@ -3076,7 +3133,6 @@ export class InkEngine {
 
   /** Règle, pointeur laser, guides d'alignement, indication « ajouter une page ». */
   private renderOverlays(sf: Surface, ctx: CanvasRenderingContext2D): void {
-    const d = sf.dpr;
     const a = this.interaction;
 
     // Guides d'alignement pendant un déplacement.
@@ -3108,7 +3164,7 @@ export class InkEngine {
     if (a?.kind === 'laser') trails.push({ pts: a.pts, alpha: 1 });
     if (trails.length) {
       ctx.save();
-      ctx.setTransform(d, 0, 0, d, 0, 0);
+      sf.screenTransform(ctx);
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       for (const t of trails) {
@@ -3165,7 +3221,7 @@ export class InkEngine {
       const L = Math.hypot(sf.vp.width, sf.vp.height) + 200;
       const T = RULER_T;
       ctx.save();
-      ctx.setTransform(d, 0, 0, d, 0, 0);
+      sf.screenTransform(ctx);
       ctx.translate(cx, cy);
       ctx.rotate(ru.angle);
       ctx.fillStyle = 'rgba(244, 241, 232, 0.82)';
@@ -3205,7 +3261,7 @@ export class InkEngine {
     // « Relâcher pour ajouter une page » (tirer au-delà de la dernière page).
     if (this.pullHint) {
       ctx.save();
-      ctx.setTransform(d, 0, 0, d, 0, 0);
+      sf.screenTransform(ctx);
       const text = '＋  Relâcher pour ajouter une page';
       ctx.font = '600 14px system-ui, -apple-system, sans-serif';
       const w = ctx.measureText(text).width + 28;
@@ -3248,6 +3304,11 @@ export class InkEngine {
   selectionIds(): string[] {
     return this.selection ? Array.from(this.selection.ids) : [];
   }
+}
+
+function frac(v: number): number {
+  const f = v - Math.floor(v + 1e-4);
+  return f < 1e-4 ? 0 : f;
 }
 
 function ema(prev: number, v: number): number {

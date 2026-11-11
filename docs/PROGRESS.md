@@ -26,6 +26,10 @@ Formes, pointeur laser, règle, notes repositionnables, minuteur, personnalisati
 favoris et plan, changement de modèle, suppression par type, tirer pour ajouter une page, marges de la fenêtre de zoom.
 Détail : [OUTILS.md](OUTILS.md).
 
+## Netteté des traits, 4ᵉ lot du 11/11/2026 : ✅ (validation iPad en attente)
+Cause mesurée : coordonnées du stylet arrondies au pixel par Safari (escalier) et fenêtre de zoom entre deux pixels.
+Lissage anti-escalier au rendu, canvas alignés, grain du crayon fin, export PNG. Détail : [RENDU.md](RENDU.md).
+
 ## Étape 2 — Application quotidienne : 🔶 en cours
 Fait : bibliothèque (barre latérale, carnets, couvertures, formats, modèles, récents, favoris, tri, recherche titres,
 dossiers, corbeille), pages (ajout, duplication, suppression, réordonnancement, miniatures paresseuses), texte, images,

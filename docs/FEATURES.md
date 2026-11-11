@@ -14,6 +14,7 @@ Dernière mise à jour : 11/11/2026 (2ᵉ lot : écriture, voir [ECRITURE.md](EC
 | --- | --- | --- | --- |
 | Écriture Apple Pencil, pression | Pointer Events `pen`, pression par outil × sensibilité | Latence réelle à mesurer | 🟡 (✅ simulé) |
 | Précision du trait | Filtre One Euro à la saisie (indépendant de la fréquence), encre jusqu'à la pointe, aucun saut au lever | Sensation à valider | 🟡 (✅ mesuré) |
+| Traits lisses et nets | Lissage anti-escalier au rendu (coordonnées arrondies par Safari), canvas calés sur les pixels, grain fin réservé au crayon — voir [RENDU.md](RENDU.md) | Netteté perçue à valider | 🟡 (✅ mesuré) |
 | Inclinaison | `altitudeAngle` ou `tiltX/Y`, effet réglable | `altitudeAngle` : Safari ≥ 18.2 | 🟡 |
 | Outils : bille, feutre fin, plume, pinceau, crayon, marqueur, surligneur | Rendus distincts, couleur / épaisseur / lissage mémorisés par outil | — | ✅ |
 | Épaisseur, palette, couleurs personnalisées, lissage | Panneau de l'outil, aperçu exact | — | ✅ |
@@ -26,6 +27,7 @@ Dernière mise à jour : 11/11/2026 (2ᵉ lot : écriture, voir [ECRITURE.md](EC
 | Déplacer, redimensionner, dupliquer, copier/coller, couleur, épaisseur | Poignées aux 4 coins | Pas de rotation | ✅ |
 | Blocs de texte (police, taille, G/I/S, couleur, alignement) | Outil Texte | Mise en forme par bloc | ✅ |
 | Images (insertion, déplacement, redimensionnement) | Réduites à 2048 px au plus | Pas de recadrage | ✅ |
+| Export d'une page en image PNG | Menu Plus ; même rendu que l'écran, 3 px par unité | Pas encore d'export PDF | ✅ |
 | Zoom / déplacement deux doigts, netteté | Rendu vectoriel | — | ✅ (iPad 🟡) |
 | Forme nette par maintien (droite, cercle, ellipse, rectangle) | Délai réglable, « garder le tracé libre », annulable | Ellipse alignée sur les axes | ✅ (iPad 🟡) |
 | Fenêtre de zoom d'écriture | Cadre déplaçable et redimensionnable, avance automatique, retour à la ligne, grossissement ×1,25–×8 | — | ✅ (iPad 🟡) |

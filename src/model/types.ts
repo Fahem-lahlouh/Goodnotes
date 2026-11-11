@@ -38,7 +38,7 @@ export interface StrokeStyle {
   /** Influence de la pression sur l'épaisseur (0 = aucune). */
   thinning: number;
   /**
-   * Ancien lissage appliqué au rendu (traits créés avant le 12/11/2026). Les nouveaux traits
+   * Ancien lissage appliqué au rendu (premiers traits de Calame). Les traits plus récents
    * sont filtrés à la saisie (points déjà lissés) : streamline = 0.
    */
   streamline: number;
@@ -50,6 +50,12 @@ export interface StrokeStyle {
   realPressure: boolean;
   /** Plume : angle du bec en radians (π/4 par défaut). */
   nibAngle?: number;
+  /**
+   * Résolution de saisie (unités page par pixel de saisie). Sert au lissage spatial du rendu qui
+   * efface l'« escalier » des coordonnées arrondies au pixel (Safari). 0 = aucun lissage
+   * (formes nettes). Absent : valeur par défaut (DEFAULT_RES).
+   */
+  res?: number;
 }
 
 export interface Stroke {

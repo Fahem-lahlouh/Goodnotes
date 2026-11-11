@@ -42,6 +42,7 @@ export function PageMenu({
   onAddPage,
   onShowPages,
   onExport,
+  onExportPng,
   onFullscreen,
   onFocus,
   onSettings,
@@ -65,6 +66,7 @@ export function PageMenu({
   onAddPage: () => void;
   onShowPages: () => void;
   onExport: () => void;
+  onExportPng: (pageId: string) => void;
   onFullscreen: () => void;
   onFocus: () => void;
   onSettings: () => void;
@@ -290,6 +292,7 @@ export function PageMenu({
       <SheetGroup title="Carnet">
         <SheetItem icon="plus" label="Ajouter une page après celle-ci" disabled={readOnly} onClick={done(onAddPage)} />
         <SheetItem icon="pages" label="Pages, favoris et plan" onClick={done(onShowPages)} />
+        <SheetItem icon="image" label="Exporter la page en image" detail="PNG haute définition (≈ 3 fois l'écran), même rendu que l'écran" onClick={done(() => onExportPng(page.id))} />
         <SheetItem icon="download" label="Exporter une sauvegarde" detail="Fichier .calame, à garder dans Fichiers ou iCloud Drive" onClick={done(onExport)} />
       </SheetGroup>
       <SheetGroup title="Affichage">

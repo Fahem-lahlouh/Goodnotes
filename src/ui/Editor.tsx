@@ -23,6 +23,7 @@ import { ToolsSheet } from './ToolsSheet';
 import { PageMenu } from './PageMenu';
 import { TimeKeeper } from './TimeKeeper';
 import type { PaperSpec } from '../model/types';
+import { downloadBlob, fileSafe, renderPagePng } from './exportPage';
 import { getPrefs, loadView, saveView, setPrefs as setPrefsGlobal, usePrefs } from './prefs';
 
 declare global {
@@ -892,6 +893,15 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
           onAddPage={() => void addPage(view.pageIndex + 1)}
           onShowPages={() => setShowPages(true)}
           onExport={() => void exportFullBackup()}
+          onExportPng={(id) => {
+            const s = opened.session;
+            const n = s.notebook.pageIds.indexOf(id) + 1;
+            renderPagePng(s, id)
+              .then(({ blob }) => {
+                downloadBlob(blob, `${fileSafe(s.notebook.title)} - page ${n}.png`);
+              })
+              .catch((e) => toast(`Export impossible : ${(e as Error).message}`, 'error'));
+          }}
           onFullscreen={() => void toggleFullscreen(moreRef.current)}
           onFocus={() => setFocus(true)}
           onSettings={() => setShowSettings(true)}

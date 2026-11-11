@@ -70,6 +70,16 @@ Reporter les résultats dans `docs/TESTS.md` (section « Validation iPad »).
 | 39 | Plus → Modification des documents → Garder l'écran allumé ; attendre au-delà du délai de verrouillage | L'écran ne se met pas en veille (sinon : non pris en charge par cette version) |
 | 40 | Balayer au-delà de la dernière page | « Relâcher pour ajouter une page », puis nouvelle page affichée |
 
+### Netteté des traits (4ᵉ lot du 11/11/2026)
+
+| # | Scénario | Attendu |
+| --- | --- | --- |
+| 41 | Écrire lentement une ligne presque horizontale au Pencil (bille), zoomer à ×3 | Bords réguliers, sans ondulation en escalier ni grain |
+| 42 | Même chose au doigt (mode « doigt et stylet ») | Idem |
+| 43 | Écrire dans la fenêtre de zoom ; comparer la netteté de la fenêtre et de la page | Les deux sont nettes, sans flou |
+| 44 | Écrire avec le crayon puis la bille ; zoomer | Grain fin seulement sur le crayon ; bille unie |
+| 45 | Plus → Exporter la page en image ; ouvrir le PNG et zoomer | Traits nets et lisses, identiques à l'écran |
+
 Les points 1, 3, 5 et 7 conditionnent la suite du projet : s'ils ne sont pas satisfaisants, ils seront traités avant toute
 nouvelle fonctionnalité.
 
