@@ -7,6 +7,8 @@
  * n'est donc jamais interrompue par un rechargement.
  */
 let waiting: ServiceWorker | null = null;
+/** Version annoncée par le serveur (null si inconnue / hors ligne). */
+export let servedVersion: string | null = null;
 const listeners = new Set<() => void>();
 
 export function onUpdateAvailable(fn: () => void): () => void {
@@ -32,9 +34,22 @@ export function registerServiceWorker(): void {
           if (sw.state === 'installed' && navigator.serviceWorker.controller) notify(sw);
         });
       });
-      // Vérifie les mises à jour quand l'app revient au premier plan.
+      // Vérifie les mises à jour au démarrage et quand l'app revient au premier plan :
+      // version.json (jamais mis en cache) indique la version réellement servie.
+      const check = async () => {
+        try {
+          const r = await fetch(`./version.json?t=${Date.now()}`, { cache: 'no-store' });
+          if (!r.ok) return;
+          const v = (await r.json()) as { version?: string };
+          servedVersion = v.version ?? null;
+          if (servedVersion && servedVersion !== __APP_VERSION__) await reg.update();
+        } catch {
+          /* hors ligne : rien à vérifier */
+        }
+      };
+      void check();
       document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') reg.update().catch(() => {});
+        if (document.visibilityState === 'visible') void check();
       });
     } catch (e) {
       console.warn('[calame] service worker non enregistré', e);
