@@ -15,10 +15,12 @@
 - `npm run build` : OK ; `node scripts/check-secrets.mjs` : aucun secret
 
 ### Non testé automatiquement / limites
-- **WebKit** (moteur de Safari, iPad Pro 11 émulé) : exécuté en CI GitHub uniquement. Premier passage le
-  11/11/2026 : **4/4** (création/réouverture et pages, corbeille, recherche, deux onglets). Les tests d'écriture
-  pilotent le stylet via le protocole Chromium et ne tournent donc pas sur WebKit : l'écriture sous Safari
-  reste à valider sur l'iPad.
+- **WebKit** (moteur de Safari, iPad Pro 11 émulé) : exécuté en CI GitHub uniquement (image officielle Playwright).
+  11/11/2026 : **6/6** (formats et modèles, note rapide et tableau blanc, dossiers, corbeille/favoris/tri, **migration
+  d'une base v1**, deux onglets ; téléchargement et hors ligne testés sur Chromium bureau). Les tests d'écriture pilotent
+  le stylet via le protocole Chromium et ne tournent donc pas sur WebKit : l'écriture sous Safari reste à valider sur l'iPad.
+- **Incident CI du 11/11/2026** : les machines GitHub ne résolvaient plus les miroirs apt d'Ubuntu, bloquant
+  l'installation des navigateurs. Les tests de bout en bout tournent désormais dans l'image Playwright (sans apt).
 - **Apple Pencil réel** : latence, rejet de paume, pression réelle, survol, rotation : voir la procédure [IPAD.md](IPAD.md).
 - **Performances** : aucune mesure sur iPad n'a encore été faite. L'interface affiche des mesures réelles
   (temps de rendu, délai événement → frame, échantillons/s) à activer dans les réglages. Aucun chiffre n'est annoncé.
