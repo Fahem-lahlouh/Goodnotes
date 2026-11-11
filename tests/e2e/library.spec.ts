@@ -118,3 +118,17 @@ test('fonctionne hors ligne après une première visite', async ({ page, context
   expect(await strokeCount(page)).toBe(1);
   await context.setOffline(false);
 });
+
+test('sauvegarde en un toucher depuis l’éditeur, avec le dernier trait', async ({ page }, info) => {
+  test.skip(info.project.name !== 'chromium-desktop', 'téléchargement testé sur bureau');
+  await createNotebook(page, 'Export rapide');
+  await expect(page.getByRole('button', { name: /Jamais sauvegardé/ })).toBeVisible();
+  await drawWithMouse(page);
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: /Exporter une sauvegarde/ }).click(),
+  ]);
+  const json = JSON.parse(readFileSync((await download.path())!, 'utf8'));
+  expect(json.strokes).toHaveLength(1);
+  await expect(page.getByRole('button', { name: /Sauvegardé à l’instant/ })).toBeVisible();
+});

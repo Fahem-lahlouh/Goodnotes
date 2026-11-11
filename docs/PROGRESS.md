@@ -23,9 +23,10 @@ Reste :
 4. Glisser-déposer des pages ; renommer depuis l'éditeur.
 5. Palette de commandes (⌘K), capture rapide.
 
-## Étape 3 — Documents et synchronisation : ⬜
+## Étape 3 — Documents : ⬜
 - Import PDF (pdf.js, rendu progressif), annotation, export PDF/image ; texte, images, formes.
-- **Décision requise** : service de synchronisation privée (voir [ARCHITECTURE.md](ARCHITECTURE.md#étape-3--authentification-et-synchronisation-privée-à-décider)).
+- Synchronisation : **retirée du périmètre** (décision du 11/11/2026 : aucune base, 100 % gratuit). Copie entre
+  appareils par fichier `.calame`.
 
 ## Étape 4 — Fonctions avancées : ⬜
 Reconnaissance (évaluation locale vs externe opt-in), audio synchronisé (les horodatages par point existent déjà),
@@ -33,6 +34,10 @@ fiches et répétition espacée, liens entre notes, vue partagée, modèles réu
 
 ## Étape 5 — Finition et déploiement : ⬜
 Mesures de performance sur iPad, accessibilité, déploiement vérifié.
+
+## Décisions
+- 11/11/2026 : aucune base de données ni serveur ; stockage sur l'appareil ; 100 % gratuit (GitHub Pages + Actions
+  sur dépôt public). Indicateur « Non synchronisé » remplacé par l'âge de la dernière sauvegarde exportée.
 
 ## Points d'attention
 - WebKit en CI : bloquant depuis le premier passage vert (bibliothèque, pages, multi-onglets) ; pas de test d'écriture WebKit automatisé.

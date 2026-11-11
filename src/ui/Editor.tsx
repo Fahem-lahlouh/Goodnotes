@@ -12,6 +12,7 @@ import { SettingsPanel } from './SettingsPanel';
 import { Toolbar } from './Toolbar';
 import { toast } from './Toast';
 import { loadView, saveView, setPrefs as setPrefsGlobal, usePrefs } from './prefs';
+import { BACKUP_STALE_DAYS, backupAgeDays, backupLabel, exportFullBackup, useLastBackup } from './backupStatus';
 
 declare global {
   interface Window {
@@ -320,6 +321,7 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
           </div>
           <div className="topbar-right">
             <SaveIndicator state={save} />
+            <BackupChip />
             <button className="zoom-chip" onClick={() => engineRef.current?.fitWidth()} title="Ajuster à la largeur (⌘0)">
               {Math.round(view.scale * 100)} %
             </button>
@@ -477,12 +479,34 @@ function SaveIndicator({ state, compact }: { state: SaveState; compact?: boolean
           <span className="save-label-short">{short}</span>
         </span>
       )}
-      {!compact && (
-        <span className="sync-label" title="Synchronisation non configurée : les notes restent sur cet appareil">
-          <Icon name="cloudOff" size={14} /> <span className="sync-text">Non synchronisé</span>
-        </span>
-      )}
       {state.status === 'error' && !compact && <span className="sr-only">{state.error}</span>}
     </span>
+  );
+}
+
+/**
+ * Deuxième indicateur, distinct de l'enregistrement local : la dernière copie
+ * exportée hors du navigateur. Un toucher exporte une sauvegarde complète.
+ */
+function BackupChip() {
+  const last = useLastBackup();
+  const [busy, setBusy] = useState(false);
+  const stale = last !== undefined && backupAgeDays(last) >= BACKUP_STALE_DAYS;
+  const label = backupLabel(last);
+  return (
+    <button
+      className={`backup-chip${stale ? ' is-stale' : ''}`}
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        await exportFullBackup();
+        setBusy(false);
+      }}
+      title={`${label}. Toucher pour exporter une sauvegarde complète (copie hors du navigateur).`}
+      aria-label={`${label}. Exporter une sauvegarde`}
+    >
+      <Icon name={stale ? 'alert' : 'download'} size={14} />
+      <span className="backup-text">{busy ? 'Export…' : label}</span>
+    </button>
   );
 }

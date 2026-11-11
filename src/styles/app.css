@@ -780,12 +780,23 @@ input[type='range'] {
 .save-dot.is-error {
   background: var(--danger);
 }
-.sync-label {
+.backup-chip {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding-left: 6px;
-  border-left: 1px solid var(--border);
+  gap: 4px;
+  min-height: 36px;
+  padding: 0 8px;
+  margin-right: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+.backup-chip.is-stale {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 50%, var(--border));
 }
 .editor-body {
   position: relative;
@@ -1219,7 +1230,7 @@ input[type='range'] {
 @media (max-width: 760px) {
   .hide-narrow,
   .save-label,
-  .sync-text {
+  .backup-text {
     display: none;
   }
   .search input {

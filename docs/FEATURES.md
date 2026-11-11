@@ -1,7 +1,9 @@
 # Matrice des fonctionnalités
 
 **Légende de l'état** — ✅ réalisé et testé automatiquement · 🟡 réalisé, validation sur iPad réel requise ·
-🔶 partiel · ⬜ non commencé. Un bouton présent n'implique pas une fonctionnalité réalisée.
+🔶 partiel · ⬜ non commencé · ✖ hors périmètre (décision).
+
+**Contrainte : aucune base de données ni serveur, 100 % gratuit** — toutes les données restent sur l'appareil. Un bouton présent n'implique pas une fonctionnalité réalisée.
 
 **Sources Goodnotes.** Les pages officielles n'ont pas pu être ouvertes directement depuis l'environnement de
 développement (réseau restreint) ; la colonne « Référence » s'appuie sur des extraits de pages officielles
@@ -88,13 +90,13 @@ Dernière mise à jour : 11/11/2026 (fin d'étape 1).
 | Installation écran d'accueil, mode standalone | Manifeste + icônes + méta Apple | 🟡 |
 | Hors ligne après première visite | Service worker précache | ✅ (Chromium) / 🟡 Safari |
 | Sauvegarde locale automatique incrémentale | Transaction par action | ✅ |
-| Indicateurs « enregistré » / « synchronisé » distincts | Oui (synchro : « Non synchronisé ») | ✅ |
+| Indicateurs distincts « enregistré sur l'appareil » / « sauvegardé hors navigateur » | Pastille + âge de la dernière sauvegarde (un toucher = export) | ✅ |
 | Erreurs et quota de stockage | Message, nouvel essai, jauge de quota | ✅ |
 | Migrations versionnées | Base + enregistrements | ✅ |
 | Export / restauration complets | `.calame`, sans écrasement | ✅ |
 | Protection multi-onglets | Web Locks + BroadcastChannel | ✅ |
 | Mises à jour sans interrompre l'écriture | Activation manuelle après vidage | ✅ (logique) / 🟡 iPad |
-| Verrouillage / espace privé | — | ⬜ (étape 2) |
-| Authentification + copie distante privée | Voir ARCHITECTURE.md | ⬜ (décision requise) |
-| Gestion des conflits de synchronisation | — | ⬜ |
+| Verrouillage local par code (Web Crypto) | AES-GCM + PBKDF2 | ⬜ (étape 2) |
+| Authentification, copie distante, synchronisation, conflits | — | ✖ Hors périmètre (choix : aucune base, 100 % gratuit) |
+| Copie entre appareils | Export/restauration `.calame` via iCloud Drive | ✅ |
 | Thèmes clair / sombre, barre repositionnable | Oui | ✅ |

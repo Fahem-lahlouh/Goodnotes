@@ -4,8 +4,8 @@ Carnets manuscrits personnels pour **iPad et Apple Pencil**, sous forme d'applic
 Goodnotes sert de référence fonctionnelle ; Calame a sa propre identité (nom, logo, interface).
 
 > **État : étape 1 terminée (fondations + moteur d'écriture), étape 2 en partie.**
-> Les notes sont stockées **uniquement sur l'appareil** (IndexedDB). La synchronisation privée n'existe pas encore.
-> Exportez régulièrement une sauvegarde. Détail : [docs/PROGRESS.md](docs/PROGRESS.md).
+> **Aucune base de données, aucun serveur, 100 % gratuit** : les notes sont stockées uniquement sur l'appareil
+> (IndexedDB). Exportez régulièrement une sauvegarde (bouton dans l'éditeur) dans Fichiers ou iCloud Drive. Détail : [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ## Ce qui fonctionne aujourd'hui
 
@@ -16,7 +16,8 @@ Goodnotes sert de référence fonctionnelle ; Calame a sa propre identité (nom,
 - Zoom et défilement à deux doigts, à la molette / trackpad ; traits nets à tout niveau de zoom ; rotation de l'iPad.
 - Bibliothèque : carnets avec couverture et papier (blanc, ligné, quadrillé, pointillé), récents, favoris, recherche par titre, corbeille.
 - Pages : ajout, duplication, suppression, réordonnancement, miniatures.
-- Enregistrement local automatique trait par trait, indicateur d'état, reprise à la même position.
+- Enregistrement local automatique trait par trait, reprise à la même position.
+- Deux indicateurs : « Enregistré sur cet appareil » et âge de la dernière sauvegarde exportée (un toucher = export).
 - Protection multi-onglets (un seul onglet écrit, les autres en lecture seule et à jour).
 - Sauvegarde complète exportable et restauration sans écrasement.
 - Fonctionnement hors ligne après la première visite ; mises à jour appliquées seulement à la demande.
@@ -60,8 +61,8 @@ Résultats et limites : [docs/TESTS.md](docs/TESTS.md).
 2. Fusionner sur `main` : le workflow `Déploiement GitHub Pages` construit et publie `dist/`.
 3. Adresse attendue : `https://fahem-lahlouh.github.io/Goodnotes/`.
 
-GitHub Pages publie **l'interface** (code public). Il ne protège pas l'accès et ne stocke aucune note : vos notes restent
-dans le navigateur de votre iPad. Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) pour l'authentification et la synchronisation prévues.
+GitHub Pages publie **l'interface** (code public, gratuit pour un dépôt public). Il ne stocke aucune note : vos notes
+restent dans le navigateur de votre iPad et ne sont jamais envoyées. Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Documentation
 

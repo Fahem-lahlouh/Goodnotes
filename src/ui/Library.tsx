@@ -7,7 +7,6 @@ import {
   deliverFile,
   exportBackup,
   parseBackup,
-  recordBackupDate,
   restoreBackup,
   serializeBackup,
 } from '../storage/backup';
@@ -17,6 +16,7 @@ import { Confirm, Modal } from './Modal';
 import { PaperPicker } from './PaperPicker';
 import { toast } from './Toast';
 import { usePrefs } from './prefs';
+import { BACKUP_STALE_DAYS, backupAgeDays, exportFullBackup, useLastBackup } from './backupStatus';
 
 type Filter = 'all' | 'favorites' | 'trash';
 
@@ -451,13 +451,10 @@ function RenameDialog({ initial, onClose, onSave }: { initial: string; onClose: 
 }
 
 function BackupReminder({ onOpen, hasNotebooks }: { onOpen: () => void; hasNotebooks: boolean }) {
-  const [last, setLast] = useState<number | null | undefined>(undefined);
-  useEffect(() => {
-    repo.getMeta<number>('lastBackupAt').then((v) => setLast(v ?? null), () => setLast(null));
-  }, []);
+  const last = useLastBackup();
   if (!hasNotebooks || last === undefined) return null;
-  const days = last ? (Date.now() - last) / 86_400_000 : Infinity;
-  if (days < 7) return null;
+  const days = backupAgeDays(last);
+  if (days < BACKUP_STALE_DAYS) return null;
   return (
     <div className="callout">
       <Icon name="alert" size={18} />
@@ -490,15 +487,8 @@ function StorageDialog({ onClose, onRestored }: { onClose: () => void; onRestore
   const doExport = async () => {
     setBusy(true);
     try {
-      const b = await exportBackup();
-      const r = await deliverFile(serializeBackup(b), backupFileName());
-      if (r !== 'cancelled') {
-        await recordBackupDate();
-        toast(`Sauvegarde créée : ${b.notebooks.length} carnet(s), ${b.strokes.length} trait(s).`);
-      }
+      await exportFullBackup();
       await refresh();
-    } catch (e) {
-      toast(`Export impossible : ${(e as Error).message}`, 'error');
     } finally {
       setBusy(false);
     }
@@ -606,10 +596,11 @@ function StorageDialog({ onClose, onRestored }: { onClose: () => void; onRestore
         </div>
       </section>
       <section className="panel-section">
-        <h3>Synchronisation</h3>
+        <h3>Confidentialité et autres appareils</h3>
         <p className="small">
-          <Icon name="cloudOff" size={16} /> Non configurée. Vos notes ne quittent pas cet appareil. La copie distante privée est
-          prévue à l'étape 3 (voir la documentation du projet).
+          Calame n'utilise aucun serveur ni base de données : vos notes ne quittent jamais cet appareil et personne d'autre
+          n'y a accès en ouvrant l'adresse du site. Pour les retrouver sur un autre appareil, exportez une sauvegarde
+          dans iCloud Drive puis restaurez-la là-bas.
         </p>
       </section>
     </Modal>

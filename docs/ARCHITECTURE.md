@@ -16,17 +16,17 @@
 │  Persistance locale (src/storage) — IndexedDB, migrations, sauvegardes   │
 │  Service worker (sw.js) — cache de l'application uniquement             │
 └──────────────────────────────────────────────────────────────────────────┘
-        ▲ fichiers statiques                    (étape 3, non implémentée)
-   GitHub Pages                                 Service privé : auth + copie distante
+        ▲ fichiers statiques (code public)        Aucun serveur, aucune base de données :
+   GitHub Pages                                 les notes ne quittent jamais l'appareil
 ```
 
 | Rôle | Solution actuelle | Remarque |
 | --- | --- | --- |
-| Dépôt du code | GitHub `Fahem-lahlouh/Goodnotes` | Peut être public : aucun secret, aucune note. |
+| Dépôt du code | GitHub `Fahem-lahlouh/Goodnotes` | Public requis pour Pages gratuit : aucun secret, aucune note. |
 | Hébergement de l'interface | GitHub Pages (workflow `deploy.yml`) | Statique, public. |
-| Authentification | **Aucune pour l'instant** | Les notes ne quittent pas l'appareil. Voir « Étape 3 ». |
+| Authentification | **Aucune (choix)** | Aucune donnée n'est sur un serveur ; verrouillage local par code prévu. |
 | Stockage des données | IndexedDB du navigateur | Non garanti à vie → sauvegardes exportables. |
-| Synchronisation | **Non implémentée** | Indicateur « Non synchronisé » toujours affiché. |
+| Synchronisation | **Aucune (choix)** | Copie entre appareils par fichier `.calame`. |
 | IA / reconnaissance | **Non implémentée** | Rien n'est envoyé à un service externe. |
 
 ## Modules
@@ -81,32 +81,38 @@ CSP stricte injectée au build (`script-src 'self'`, `connect-src 'self'`, `obje
 `referrer: no-referrer`, aucun script tiers, aucune requête réseau sortante. `scripts/check-secrets.mjs`
 bloque le build CI si un motif de secret apparaît dans le dépôt ou le bundle.
 
-## Étape 3 — Authentification et synchronisation privée (à décider)
+## Choix : aucune base de données, 100 % gratuit (décision du 11/11/2026)
 
-GitHub Pages ne fournit ni authentification serveur ni stockage privé. Deux options simples :
+Les notes sont stockées **uniquement sur l'appareil** (IndexedDB du navigateur). Il n'y a ni serveur, ni
+base de données, ni compte, ni synchronisation automatique. Coût : **0 €**.
 
-| | **A. Supabase** (recommandée) | **B. Cloudflare Pages + Access + Workers/D1/R2** |
+| Besoin | Réponse sans base de données | Coût |
 | --- | --- | --- |
-| Interface | Reste sur GitHub Pages | Déplacée sur Cloudflare Pages |
-| Accès privé | Compte unique, inscriptions désactivées, règles RLS `owner = auth.uid()` côté base | Cloudflare Access devant **toute** l'application (même l'interface devient privée) |
-| Stockage | Postgres (traits) + Storage (PDF, audio) | D1 (SQL) + R2 (fichiers) |
-| Hors ligne | Inchangé (IndexedDB) ; synchro au retour du réseau | Idem |
-| Maintenance | Faible (service géré) | Moyenne (code Worker à maintenir) |
-| Coût | Offre gratuite suffisante pour un usage personnel ; **projet mis en pause après une période d'inactivité** sur l'offre gratuite ; offre payante ≈ 25 $/mois | Offres gratuites généreuses pour un utilisateur |
+| Héberger l'interface | GitHub Pages | Gratuit **pour un dépôt public** (un dépôt privé exige une offre GitHub payante) |
+| CI / déploiement | GitHub Actions | Gratuit (dépôt public) |
+| Stocker les notes | IndexedDB de l'iPad | Gratuit, limité par l'espace de l'appareil |
+| Copie de secours | Fichier `.calame` exporté dans Fichiers / iCloud Drive (5 Go gratuits) | Gratuit |
+| Autre appareil | Exporter puis restaurer le fichier `.calame` | Gratuit |
+| Espace réservé à soi | Les notes ne sont jamais envoyées : visiter l'adresse du site ne donne accès à rien. Verrouillage par code prévu (ci-dessous) | Gratuit |
 
-Les quotas et prix sont à **revérifier sur les pages officielles au moment du choix** (non consultables
-depuis l'environnement de développement initial). Aucune option n'a été engagée.
+Ce que ce choix implique :
+- **Le code et l'interface sont publics** (dépôt public + GitHub Pages) ; ils ne contiennent ni secret ni note
+  (contrôle automatique `check-secrets`).
+- Pas de copie distante automatique : **la sauvegarde exportée est la seule protection** contre l'effacement du
+  stockage du navigateur. L'éditeur affiche donc en permanence l'âge de la dernière sauvegarde (un toucher = export).
+- Pas de synchronisation ni de gestion de conflits entre appareils (fonctionnalités retirées du périmètre).
 
-Principes retenus quelle que soit l'option : la clé publique (« anon ») seule dans le bundle ; toute
-autorisation appliquée **côté serveur** ; synchronisation par trait (identifiants UUID, horodatage,
-suppressions en « pierres tombales ») ; en cas de conflit sur le même enregistrement, conservation des deux
-versions plutôt qu'écrasement silencieux ; option de chiffrement de bout en bout (Web Crypto, AES-GCM, clé
-dérivée PBKDF2) à étudier.
+### Verrouillage local (prévu, étape 2)
+Code d'accès choisi par l'utilisateur → clé AES-GCM 256 dérivée par PBKDF2-SHA-256 (Web Crypto, aucun
+algorithme maison). Points chiffrés avant écriture dans IndexedDB ; verrouillage après inactivité et à la mise en
+arrière-plan ; clé jamais stockée. Code oublié = données illisibles : récupération uniquement par une sauvegarde
+exportée (elle-même chiffrable). Protège contre l'accès à l'iPad déverrouillé par un tiers, pas contre un
+appareil compromis.
 
-### Option « tout sur GitHub Pages »
-Possible avec un **coffre local chiffré** (Web Crypto) : cela protège les données du coffre si quelqu'un
-accède à l'appareil, mais **ne rend pas l'interface privée** (le site et son code restent publics) et
-n'offre aucune copie distante. Ce n'est donc pas un substitut à l'accès privé demandé.
+### Si un jour une copie distante devient nécessaire
+Options gratuites possibles sans « base » à administrer : dépôt du fichier `.calame` chiffré dans un stockage
+personnel (iCloud Drive via la feuille de partage, déjà possible). Toute solution avec serveur (Supabase,
+Cloudflare…) est écartée tant qu'elle n'est pas explicitement demandée.
 
 ## Limites connues de la plateforme web (Safari iPadOS)
 
