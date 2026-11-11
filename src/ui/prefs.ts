@@ -26,7 +26,36 @@ export interface Prefs {
   favorites: Favorite[];
   customColors: string[];
   librarySort: 'updated' | 'created' | 'title' | 'opened';
+  /** Éléments affichés dans la barre d'outils (les autres restent dans le menu « Outils »). */
+  toolbarItems: ToolbarItem[];
+  /** Position des boutons annuler / rétablir dans la barre d'outils. */
+  undoPosition: 'left' | 'right';
+  /** Côté du panneau des pages. */
+  sidebarSide: 'left' | 'right';
+  /** Empêcher la mise en veille de l'écran pendant l'écriture (si le navigateur le permet). */
+  keepAwake: boolean;
+  /** Numéro de page affiché sur la page. */
+  showPageNumber: boolean;
 }
+
+export type ToolbarItem = 'pen' | 'highlighter' | 'eraser' | 'select' | 'text' | 'shape' | 'laser' | 'image' | 'zoom' | 'ruler' | 'favorites' | 'finger';
+
+export const TOOLBAR_ITEMS: { id: ToolbarItem; label: string }[] = [
+  { id: 'pen', label: 'Stylo' },
+  { id: 'highlighter', label: 'Surligneur' },
+  { id: 'eraser', label: 'Gomme' },
+  { id: 'select', label: 'Sélection' },
+  { id: 'text', label: 'Texte' },
+  { id: 'shape', label: 'Formes' },
+  { id: 'laser', label: 'Pointeur laser' },
+  { id: 'image', label: 'Images' },
+  { id: 'zoom', label: 'Fenêtre de zoom' },
+  { id: 'ruler', label: 'Règle' },
+  { id: 'favorites', label: 'Favoris de stylos' },
+  { id: 'finger', label: 'Doigt : écrit / navigue' },
+];
+
+export const DEFAULT_TOOLBAR: ToolbarItem[] = ['pen', 'highlighter', 'eraser', 'select', 'text', 'image', 'zoom', 'favorites', 'finger'];
 
 const KEY = 'calame:prefs:v2';
 const OLD_KEY = 'calame:prefs:v1';
@@ -46,6 +75,11 @@ export const DEFAULT_PREFS: Prefs = {
   ],
   customColors: [],
   librarySort: 'updated',
+  toolbarItems: DEFAULT_TOOLBAR,
+  undoPosition: 'left',
+  sidebarSide: 'right',
+  keepAwake: false,
+  showPageNumber: true,
 };
 
 type Raw = Partial<Prefs> & {
@@ -80,6 +114,11 @@ export function normalizePrefs(p: Raw): Prefs {
     toolbar: p.toolbar === 'bottom' ? 'bottom' : 'top',
     favorites: Array.isArray(p.favorites) ? p.favorites : DEFAULT_PREFS.favorites,
     customColors: Array.isArray(p.customColors) ? p.customColors.slice(0, 10) : [],
+    toolbarItems: Array.isArray(p.toolbarItems) ? p.toolbarItems.filter((t) => TOOLBAR_ITEMS.some((x) => x.id === t)) : DEFAULT_TOOLBAR,
+    undoPosition: p.undoPosition === 'right' ? 'right' : 'left',
+    sidebarSide: p.sidebarSide === 'left' ? 'left' : 'right',
+    keepAwake: p.keepAwake === true,
+    showPageNumber: p.showPageNumber !== false,
   };
 }
 

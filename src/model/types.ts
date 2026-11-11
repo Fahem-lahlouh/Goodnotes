@@ -101,6 +101,8 @@ interface ItemBase {
 export interface TextItem extends ItemBase, TextStyle {
   kind: 'text';
   text: string;
+  /** Note repositionnable : couleur du papier de la note (absent pour un bloc de texte simple). */
+  note?: string;
 }
 
 export interface ImageItem extends ItemBase {
@@ -202,6 +204,10 @@ export interface Notebook {
   openedAt: number;
   /** Date de mise à la corbeille, ou null. */
   trashedAt: number | null;
+  /** Pages en favori (signets), dans l'ordre d'ajout. Facultatif. */
+  bookmarks?: string[];
+  /** Plan du carnet : pages nommées. Facultatif. */
+  outline?: { pageId: string; title: string }[];
   v: number;
 }
 

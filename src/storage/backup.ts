@@ -114,6 +114,8 @@ export async function restoreBackup(b: BackupFile, db: () => Promise<DB> = getDB
       id: nid,
       title: `${nb.title} (restauré)`,
       pageIds: nb.pageIds.map((pid) => pageMap.get(pid)).filter((x): x is string => !!x),
+      ...(nb.bookmarks ? { bookmarks: nb.bookmarks.map((pid) => pageMap.get(pid)).filter((x): x is string => !!x) } : {}),
+      ...(nb.outline ? { outline: nb.outline.filter((o) => pageMap.has(o.pageId)).map((o) => ({ ...o, pageId: pageMap.get(o.pageId)! })) } : {}),
     });
     for (const p of nbPages) outPages.push({ ...p, id: pageMap.get(p.id)!, notebookId: nid });
     for (const s of strokes) {

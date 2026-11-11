@@ -75,3 +75,14 @@ describe('Fin de trait avec petit crochet', () => {
     }
   });
 });
+
+describe('Notes repositionnables', () => {
+  it('hauteur au moins égale à 80 % de la largeur, marge intérieure plus grande', async () => {
+    const { textHeight, textPad, TEXT_PAD, NOTE_PAD } = await import('../../src/ink/items');
+    const base = { text: 'Court', font: 'sans' as const, size: 16, bold: false, italic: false, w: 200 };
+    expect(textHeight({ ...base, note: '#fde68a' })).toBeGreaterThanOrEqual(160);
+    expect(textHeight(base)).toBeLessThan(60);
+    expect(textPad({ note: '#fde68a' })).toBe(NOTE_PAD);
+    expect(textPad({})).toBe(TEXT_PAD);
+  });
+});

@@ -19,6 +19,10 @@ import { Toolbar } from './Toolbar';
 import { toast } from './Toast';
 import { ZoomPanel } from './ZoomPanel';
 import { ConvertDialog } from './ConvertDialog';
+import { ToolsSheet } from './ToolsSheet';
+import { PageMenu } from './PageMenu';
+import { TimeKeeper } from './TimeKeeper';
+import type { PaperSpec } from '../model/types';
 import { getPrefs, loadView, saveView, setPrefs as setPrefsGlobal, usePrefs } from './prefs';
 
 declare global {
@@ -45,6 +49,13 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
   const [zoom, setZoom] = useState<ZoomState | null>(null);
   const [shapeHint, setShapeHint] = useState<string | null>(null);
   const [convert, setConvert] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [rulerOn, setRulerOn] = useState(false);
+  const [timerOn, setTimerOn] = useState(false);
+  const moreRef = useRef<HTMLButtonElement>(null);
+  /** Dernière version de « ajouter une page » (appelée par le moteur, créé une seule fois). */
+  const addPageRef = useRef<(index: number) => void>(() => {});
   const zoomHostRef = useRef<HTMLDivElement>(null);
   /** Dernier grossissement connu des préférences : distingue un réglage (curseur) d'un écho du moteur. */
   const zoomSynced = useRef<number | null>(null);
@@ -125,6 +136,33 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
 
   useEffect(() => saveQueue.subscribe(setSave), []);
 
+  // Garder l'écran allumé (Screen Wake Lock), si demandé et si le navigateur le permet.
+  const wakeSupported = typeof navigator !== 'undefined' && 'wakeLock' in navigator;
+  useEffect(() => {
+    if (!prefs.keepAwake || !wakeSupported) return;
+    let lock: { release: () => Promise<void> } | null = null;
+    let alive = true;
+    const acquire = async () => {
+      try {
+        const l = await (navigator as unknown as { wakeLock: { request: (t: 'screen') => Promise<{ release: () => Promise<void> }> } }).wakeLock.request('screen');
+        if (alive) lock = l;
+        else void l.release();
+      } catch {
+        /* refusé (batterie faible, onglet masqué…) : nouvel essai au retour au premier plan */
+      }
+    };
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void acquire();
+    };
+    void acquire();
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      alive = false;
+      document.removeEventListener('visibilitychange', onVis);
+      void lock?.release().catch(() => {});
+    };
+  }, [prefs.keepAwake, wakeSupported]);
+
   // ---------- Moteur d'encre ----------
   useEffect(() => {
     const host = hostRef.current;
@@ -158,6 +196,11 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
           });
         },
         onZoom: setZoom,
+        onRuler: (r) => setRulerOn(!!r),
+        onAddPageRequest: () => {
+          const s = opened.session;
+          addPageRef.current(s.notebook.pageIds.length);
+        },
       },
       { layout: p.settings.pageLayout, pageIndex: saved?.page ?? 0 },
     );
@@ -295,6 +338,72 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
     [opened, notebookId, pageOp],
   );
 
+  useEffect(() => {
+    addPageRef.current = (i: number) => void addPage(i);
+  }, [addPage]);
+
+  // ---------- Favoris, plan, modèle ----------
+  const updateNotebook = useCallback(
+    async (fn: (n: NonNullable<OpenedNotebook['session']['notebook']>) => void) => {
+      if (!opened || opened.session.readOnly) return;
+      try {
+        const n = await repo.updateNotebook(notebookId, (x) => {
+          fn(x);
+          x.updatedAt = Date.now();
+        });
+        opened.session.setNotebook(n);
+        setVersion((v) => v + 1);
+        broadcast({ type: 'structure', notebookId });
+      } catch (e) {
+        toast((e as Error).message, 'error');
+      }
+    },
+    [opened, notebookId],
+  );
+
+  const toggleBookmark = useCallback(
+    (pageId: string) =>
+      void updateNotebook((n) => {
+        const list = n.bookmarks ?? [];
+        n.bookmarks = list.includes(pageId) ? list.filter((p) => p !== pageId) : [...list, pageId];
+        toast(list.includes(pageId) ? 'Page retirée des favoris' : 'Page ajoutée aux favoris');
+      }),
+    [updateNotebook],
+  );
+
+  const setOutline = useCallback(
+    (pageId: string, title: string | null) =>
+      void updateNotebook((n) => {
+        const list = (n.outline ?? []).filter((o) => o.pageId !== pageId);
+        if (title) list.push({ pageId, title });
+        // Le plan suit l'ordre des pages.
+        n.outline = list.sort((a, b) => n.pageIds.indexOf(a.pageId) - n.pageIds.indexOf(b.pageId));
+      }),
+    [updateNotebook],
+  );
+
+  const changeTemplate = useCallback(
+    async (pageIds: string[], paper: PaperSpec) => {
+      if (!opened || opened.session.readOnly) return;
+      const s = opened.session;
+      try {
+        await saveQueue.flush();
+        for (const id of pageIds) {
+          await repo.updatePagePaper(id, paper);
+          const pg = s.pages.get(id);
+          if (pg) s.updatePage({ ...pg, paper: { ...paper } });
+        }
+        engineRef.current?.relayout();
+        setVersion((v) => v + 1);
+        broadcast({ type: 'structure', notebookId });
+        toast(pageIds.length > 1 ? 'Modèle appliqué à toutes les pages' : 'Modèle de la page modifié');
+      } catch (e) {
+        toast((e as Error).message, 'error');
+      }
+    },
+    [opened, notebookId],
+  );
+
   const duplicatePage = useCallback(
     (pageId: string) =>
       pageOp(async () => {
@@ -414,6 +523,7 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
       else if (k === 't') setPrefs({ tool: 'text' });
       else if (k === 'f') setFocus((f) => !f);
       else if (k === 'z') setZoomOpen((z) => !z);
+      else if (k === 'r') eng.setRuler(!eng.rulerState());
       else if (k === 'enter' && zoomOpen) {
         e.preventDefault();
         eng.zoomNewline();
@@ -469,17 +579,17 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
           <div className="topbar-right">
             <SaveIndicator state={save} />
             <BackupChip />
-            <button className="icon-btn" onClick={() => addPage(view.pageIndex + 1)} disabled={readOnly} aria-label="Ajouter une page après celle-ci" title="Nouvelle page">
+            <button className="icon-btn tb-wide" onClick={() => addPage(view.pageIndex + 1)} disabled={readOnly} aria-label="Ajouter une page après celle-ci" title="Nouvelle page">
               <Icon name="plus" />
             </button>
-            <button className={`icon-btn${showPages ? ' is-on' : ''}`} onClick={() => setShowPages((s) => !s)} aria-pressed={showPages} aria-label="Miniatures des pages" title="Miniatures">
+            <button className={`icon-btn tb-wide${showPages ? ' is-on' : ''}`} onClick={() => setShowPages((s) => !s)} aria-pressed={showPages} aria-label="Miniatures des pages" title="Miniatures">
               <Icon name="pages" />
             </button>
-            <button className="icon-btn" onClick={() => setFocus(true)} aria-label="Mode concentration" title="Mode concentration (F) : masque cette barre">
+            <button className="icon-btn tb-wide" onClick={() => setFocus(true)} aria-label="Mode concentration" title="Mode concentration (F) : masque cette barre">
               <Icon name="focus" />
             </button>
             <button
-              className={`icon-btn${fs.active ? ' is-on' : ''}`}
+              className={`icon-btn tb-wide${fs.active ? ' is-on' : ''}`}
               onClick={(e) => void toggleFullscreen(e.currentTarget)}
               aria-pressed={fs.active}
               aria-label={fs.active ? 'Quitter le plein écran' : 'Plein écran'}
@@ -487,8 +597,11 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
             >
               <Icon name={fs.active ? 'exitFullscreen' : 'fullscreen'} />
             </button>
-            <button className="icon-btn" onClick={() => setShowSettings(true)} aria-label="Réglages" title="Réglages">
+            <button className="icon-btn tb-wide" onClick={() => setShowSettings(true)} aria-label="Réglages" title="Réglages">
               <Icon name="settings" />
+            </button>
+            <button ref={moreRef} className={`icon-btn${menuOpen ? ' is-on' : ''}`} onClick={() => setMenuOpen(true)} aria-haspopup="dialog" aria-label="Plus" title="Plus : page, carnet, affichage, réglages">
+              <Icon name="more" />
             </button>
           </div>
         </header>
@@ -513,6 +626,9 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
           redoLabel={hist.redoLabel}
           zoomOpen={zoomOpen}
           onToggleZoom={() => setZoomOpen((z) => !z)}
+          rulerOn={rulerOn}
+          onToggleRuler={() => engineRef.current?.setRuler(!rulerOn)}
+          onOpenTools={() => setToolsOpen(true)}
           onUndo={undo}
           onRedo={redo}
           onInsertImage={() => fileRef.current?.click()}
@@ -525,7 +641,7 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
           }}
           readOnly={readOnly}
         />
-        <div className="workspace">
+        <div className={`workspace sidebar-${prefs.sidebarSide}`}>
           <div className={`canvas-wrap${zoomOpen ? ' has-zoom' : ''}`} style={zoomOpen ? { ['--zoom-h' as string]: `${Math.round(prefs.settings.zoomPanelHeight * 100)}%` } : undefined}>
             <div className="ink-host" ref={hostRef} data-testid="ink-host" />
             {zoomOpen && engine && (
@@ -545,6 +661,26 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
                 <Icon name="shape" size={16} /> {shapeHint} — relevez pour valider
               </div>
             )}
+            {prefs.showPageNumber && opened && (
+              <div className="page-badge" aria-hidden="true">
+                {view.pageIndex + 1} / {view.pageCount}
+              </div>
+            )}
+            {rulerOn && (
+              <div className="ruler-chip" role="group" aria-label="Règle">
+                <Icon name="ruler" size={16} />
+                <button className="icon-btn sm" onClick={() => engineRef.current?.rotateRuler(-15)} aria-label="Tourner la règle de −15°" title="−15°">
+                  <Icon name="rotate" size={16} style={{ transform: 'scaleX(-1)' }} />
+                </button>
+                <button className="icon-btn sm" onClick={() => engineRef.current?.rotateRuler(15)} aria-label="Tourner la règle de +15°" title="+15°">
+                  <Icon name="rotate" size={16} />
+                </button>
+                <button className="icon-btn sm" onClick={() => engineRef.current?.setRuler(false)} aria-label="Masquer la règle" title="Masquer (R)">
+                  <Icon name="close" size={16} />
+                </button>
+              </div>
+            )}
+            {timerOn && <TimeKeeper onClose={() => setTimerOn(false)} />}
             {!opened && <div className="loading overlay">Ouverture du carnet…</div>}
             {engine && textEdit && (
               <TextEditor
@@ -718,6 +854,50 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
         </Popover>
       )}
 
+      {toolsOpen && (
+        <ToolsSheet
+          prefs={prefs}
+          setPrefs={setPrefs}
+          zoomOpen={zoomOpen}
+          rulerOn={rulerOn}
+          timerOn={timerOn}
+          readOnly={readOnly}
+          onToggleZoom={() => setZoomOpen((z) => !z)}
+          onToggleRuler={() => engineRef.current?.setRuler(!rulerOn)}
+          onToggleTimer={() => setTimerOn((t) => !t)}
+          onInsertImage={() => fileRef.current?.click()}
+          onNote={(c) => {
+            if (!engineRef.current?.startNote(c)) toast('Impossible d’ajouter une note ici.', 'error');
+          }}
+          onClose={() => setToolsOpen(false)}
+        />
+      )}
+      {menuOpen && engine && opened && (
+        <PageMenu
+          engine={engine}
+          session={opened.session}
+          prefs={prefs}
+          setPrefs={setPrefs}
+          pageIndex={view.pageIndex}
+          pageCount={view.pageCount}
+          readOnly={readOnly}
+          fullscreenActive={fs.active}
+          wakeLockSupported={wakeSupported}
+          onToggleBookmark={toggleBookmark}
+          onSetOutline={setOutline}
+          onDuplicate={(id) => void duplicatePage(id)}
+          onTemplate={(ids, paper) => void changeTemplate(ids, paper)}
+          onGoTo={(i) => engineRef.current?.goToPage(i)}
+          onDeletePage={(id) => setDeletePage(id)}
+          onAddPage={() => void addPage(view.pageIndex + 1)}
+          onShowPages={() => setShowPages(true)}
+          onExport={() => void exportFullBackup()}
+          onFullscreen={() => void toggleFullscreen(moreRef.current)}
+          onFocus={() => setFocus(true)}
+          onSettings={() => setShowSettings(true)}
+          onClose={() => setMenuOpen(false)}
+        />
+      )}
       {convert && engine && opened && <ConvertDialog engine={engine} session={opened.session} prefs={prefs} onPrefs={setPrefs} onClose={() => setConvert(false)} />}
       {showSettings && <SettingsPanel prefs={prefs} onPrefs={(p) => setPrefs(p)} onClose={() => setShowSettings(false)} />}
       {deletePage && (

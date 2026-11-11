@@ -1,7 +1,11 @@
 import type { InkTool, PenType, StrokeStyle, TextStyle } from '../model/types';
 
-/** Outils de l'éditeur. « pen » regroupe bille, plume, pinceau et crayon (voir ToolStyles.penType). */
-export type Tool = 'pen' | 'highlighter' | 'eraser' | 'select' | 'text';
+/**
+ * Outils de l'éditeur. « pen » regroupe les six stylos (voir ToolStyles.penType).
+ * « shape » : trace avec le stylo courant et transforme le tracé en forme nette au lever.
+ * « laser » : pointeur laser, tracé éphémère jamais enregistré.
+ */
+export type Tool = 'pen' | 'highlighter' | 'eraser' | 'select' | 'text' | 'shape' | 'laser';
 
 /**
  * Comportement du doigt :
@@ -53,6 +57,12 @@ export interface InkSettings {
   zoomPanelHeight: number;
   /** Fenêtre de zoom : avance automatique près du bord droit. */
   zoomAutoAdvance: boolean;
+  /** Aimanter les objets déplacés (centre de page, bords et centres des autres éléments). */
+  alignObjects: boolean;
+  /** Aperçu de la pointe au survol (stylet qui survole, souris). */
+  hoverPreview: boolean;
+  /** Tirer au-delà de la dernière page pour en ajouter une. */
+  pullToAddPage: boolean;
   showPerf: boolean;
 }
 
@@ -76,8 +86,11 @@ export const DEFAULT_SETTINGS: InkSettings = {
   shapeHold: true,
   shapeHoldDelay: 550,
   zoomFactor: 2.5,
-  zoomPanelHeight: 0.36,
+  zoomPanelHeight: 0.4,
   zoomAutoAdvance: true,
+  alignObjects: true,
+  hoverPreview: true,
+  pullToAddPage: true,
   showPerf: false,
 };
 

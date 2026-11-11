@@ -16,6 +16,17 @@ export const FONTS: Record<FontId, { label: string; css: string }> = {
 export const TEXT_SIZES = [12, 14, 16, 18, 22, 28, 36, 48];
 export const LINE_HEIGHT = 1.35;
 export const TEXT_PAD = 4;
+/** Marge intérieure d'une note repositionnable. */
+export const NOTE_PAD = 14;
+
+type TextLike = Pick<TextItem, 'text' | 'font' | 'size' | 'bold' | 'italic' | 'w'> & { note?: string };
+
+export function textPad(t: { note?: string }): number {
+  return t.note ? NOTE_PAD : TEXT_PAD;
+}
+
+/** Couleurs proposées pour les notes repositionnables. */
+export const NOTE_COLORS = ['#fde68a', '#fbcfe8', '#bfdbfe', '#bbf7d0', '#fed7aa', '#e9d5ff'];
 
 export function cssFont(st: Pick<TextStyle, 'font' | 'size' | 'bold' | 'italic'>, scale = 1): string {
   return `${st.italic ? 'italic ' : ''}${st.bold ? '700 ' : '400 '}${st.size * scale}px ${FONTS[st.font]?.css ?? FONTS.sans.css}`;
@@ -30,9 +41,9 @@ function measurer(): CanvasRenderingContext2D | null {
 }
 
 /** Découpe le texte en lignes tenant dans la largeur `w` (retour à la ligne par mots). */
-export function layoutText(t: Pick<TextItem, 'text' | 'font' | 'size' | 'bold' | 'italic' | 'w'>): string[] {
+export function layoutText(t: TextLike): string[] {
   const ctx = measurer();
-  const maxW = Math.max(10, t.w - TEXT_PAD * 2);
+  const maxW = Math.max(10, t.w - textPad(t) * 2);
   const lines: string[] = [];
   const measure = (s: string) => (ctx ? ctx.measureText(s).width : s.length * t.size * 0.55);
   if (ctx) ctx.font = cssFont(t);
@@ -60,13 +71,29 @@ export function layoutText(t: Pick<TextItem, 'text' | 'font' | 'size' | 'bold' |
   return lines;
 }
 
-export function textHeight(t: Pick<TextItem, 'text' | 'font' | 'size' | 'bold' | 'italic' | 'w'>): number {
-  return layoutText(t).length * t.size * LINE_HEIGHT + TEXT_PAD * 2;
+export function textHeight(t: TextLike): number {
+  const h = layoutText(t).length * t.size * LINE_HEIGHT + textPad(t) * 2;
+  // Une note garde une forme de carré (au moins 80 % de sa largeur).
+  return t.note ? Math.max(h, t.w * 0.8) : h;
 }
 
 export function drawText(ctx: CanvasRenderingContext2D, t: TextItem): void {
   const lines = layoutText(t);
+  const pad = textPad(t);
   ctx.save();
+  if (t.note) {
+    // Note repositionnable : papier coloré avec une ombre légère.
+    ctx.save();
+    ctx.shadowColor = 'rgba(20, 24, 32, 0.18)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetY = 2;
+    ctx.fillStyle = t.note;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(t.x, t.y, t.w, t.h, 4);
+    else ctx.rect(t.x, t.y, t.w, t.h);
+    ctx.fill();
+    ctx.restore();
+  }
   ctx.font = cssFont(t);
   ctx.fillStyle = t.color;
   ctx.textBaseline = 'alphabetic';
@@ -74,10 +101,10 @@ export function drawText(ctx: CanvasRenderingContext2D, t: TextItem): void {
   const asc = t.size * 0.98;
   lines.forEach((line, i) => {
     const w = ctx.measureText(line).width;
-    let x = t.x + TEXT_PAD;
+    let x = t.x + pad;
     if (t.align === 'center') x = t.x + (t.w - w) / 2;
-    else if (t.align === 'right') x = t.x + t.w - TEXT_PAD - w;
-    const y = t.y + TEXT_PAD + i * lh + (lh - t.size) / 2 + asc * 0.82;
+    else if (t.align === 'right') x = t.x + t.w - pad - w;
+    const y = t.y + pad + i * lh + (lh - t.size) / 2 + asc * 0.82;
     ctx.fillText(line, x, y);
     if (t.underline && line) ctx.fillRect(x, y + t.size * 0.12, w, Math.max(0.8, t.size / 16));
   });

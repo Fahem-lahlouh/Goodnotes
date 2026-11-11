@@ -55,6 +55,21 @@ Reporter les résultats dans `docs/TESTS.md` (section « Validation iPad »).
 | 29 | Dans la fenêtre : gomme, Annuler, pincer, glisser au doigt ; déplacer et redimensionner le cadre | Tout fonctionne ; aucun trait parasite lors du déplacement du cadre |
 | 30 | Sélectionner une phrase → Convertir en texte → écrire au Pencil dans le champ (Scribble), corriger, Remplacer ; Annuler | Texte éditable à la place des traits ; Annuler restaure l'écriture |
 
+### Menus et outils (3ᵉ lot du 11/11/2026)
+
+| # | Scénario | Attendu |
+| --- | --- | --- |
+| 31 | iPad en portrait, en paysage, en Split View étroit | Bouton « Outils » (à droite de la barre) et « ⋯ Plus » toujours visibles |
+| 32 | Outils → Fenêtre de zoom ; boutons marge gauche → / ← ; écrire une ligne entière | Le cadre passe seul à la ligne à la marge droite et revient à la marge gauche |
+| 33 | Fenêtre de zoom ouverte, mode « stylet uniquement » : toucher la page du doigt | Le cadre se place à cet endroit |
+| 34 | Outils → Formes : tracer cercle, rectangle, droite, puis un mot | Formes nettes ; le mot reste tel quel |
+| 35 | Outils → Pointeur laser | Trait rouge lumineux qui disparaît ; rien n'est enregistré |
+| 36 | Outils → Règle : la pivoter à deux doigts, tracer le long du bord au Pencil | Droite exacte le long de la règle ; angle affiché |
+| 37 | Outils → Notes repositionnables : créer, écrire, déplacer avec la sélection | Note colorée, texte modifiable (outil Texte), annulable |
+| 38 | Plus → favoris, plan, changer de modèle, accéder à la page, supprimer certains éléments, effacer la page | Chaque action fonctionne ; Annuler restaure les suppressions |
+| 39 | Plus → Modification des documents → Garder l'écran allumé ; attendre au-delà du délai de verrouillage | L'écran ne se met pas en veille (sinon : non pris en charge par cette version) |
+| 40 | Balayer au-delà de la dernière page | « Relâcher pour ajouter une page », puis nouvelle page affichée |
+
 Les points 1, 3, 5 et 7 conditionnent la suite du projet : s'ils ne sont pas satisfaisants, ils seront traités avant toute
 nouvelle fonctionnalité.
 

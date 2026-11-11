@@ -374,6 +374,13 @@ export class NotebookSession {
     this.notebook = n;
   }
 
+  /** Met à jour les métadonnées d'une page (ex. modèle de papier) et redessine. */
+  updatePage(page: Page): void {
+    if (!this.pages.has(page.id)) return;
+    this.pages.set(page.id, page);
+    for (const l of this.listeners) l({ pages: new Set([page.id]), additiveOnly: false, added: [] });
+  }
+
   /**
    * Remplace le contenu d'une page par l'état stocké (modification venue d'un autre onglet).
    * L'historique local est vidé : il pourrait sinon écraser le travail de l'autre onglet.
