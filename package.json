@@ -1,0 +1,36 @@
+{
+  "name": "calame",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Calame — carnet manuscrit personnel pour iPad et Apple Pencil (PWA).",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test --trace off",
+    "icons": "node scripts/make-icons.mjs",
+    "check": "npm run typecheck && npm test && npm run build && node scripts/check-secrets.mjs"
+  },
+  "dependencies": {
+    "idb": "8.0.4",
+    "perfect-freehand": "1.2.3",
+    "react": "19.2.0",
+    "react-dom": "19.2.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "22.20.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.3.0",
+    "fake-indexeddb": "6.2.8",
+    "jsdom": "31.0.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.5",
+    "vitest": "5.1.0"
+  }
+}

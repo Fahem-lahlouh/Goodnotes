@@ -1,0 +1,46 @@
+name: Vérifications
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Types
+        run: npm run typecheck
+      - name: Tests unitaires
+        run: npm test
+      - name: Build
+        run: npm run build
+      - name: Contrôle des secrets
+        run: node scripts/check-secrets.mjs
+      - name: Navigateurs Playwright
+        run: npx playwright install --with-deps chromium webkit
+      - name: Tests de bout en bout (Chromium bureau + iPad émulé)
+        run: npx playwright test --trace off
+      # WebKit (moteur de Safari) : informatif tant que cette étape n'a pas été validée
+      # au moins une fois en CI (impossible à exécuter dans l'environnement de développement initial).
+      - name: Tests de bout en bout WebKit iPad (informatif)
+        continue-on-error: true
+        run: npx playwright test --trace off --project webkit-ipad
+        env:
+          WEBKIT: '1'
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
