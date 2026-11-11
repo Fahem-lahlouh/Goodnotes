@@ -1,79 +1,28 @@
 import { newId } from '../model/ids';
-import { SCHEMA_VERSION, type Notebook, type Page, type Stroke } from '../model/types';
-import { migrateNotebook, migratePage, migrateStroke } from './migrations';
+import type { BlobRecord, Folder, Notebook, Page, PageItem, Stroke } from '../model/types';
+import {
+  BACKUP_FORMAT,
+  BACKUP_VERSION,
+  base64ToBytes,
+  base64ToFloat32,
+  buildBackup,
+  type BackupFile,
+} from './backupCore';
+import { migrateFolder, migrateItem, migrateNotebook, migratePage, migrateStroke } from './migrations';
 import { repo as defaultRepo, type Repo } from './repo';
 import { getDB, type DB } from './db';
+import type { IDBPDatabase } from 'idb';
 
 /**
  * Format de sauvegarde natif « .calame » (JSON, documenté dans docs/FORMAT.md).
- * Les points des traits sont encodés en base64 (float32 little-endian) :
- * compact et sans perte par rapport au stockage local.
+ * Version 2 : ajoute objets de page, dossiers et images. Les fichiers version 1
+ * restent lisibles.
  */
-export const BACKUP_FORMAT = 'calame-backup';
-export const BACKUP_VERSION = 1;
-
-type SerializedStroke = Omit<Stroke, 'points'> & { points: string };
-
-export interface BackupFile {
-  format: typeof BACKUP_FORMAT;
-  version: number;
-  schema: number;
-  app: string;
-  exportedAt: string;
-  notebooks: Notebook[];
-  pages: Page[];
-  strokes: SerializedStroke[];
-}
-
-export function float32ToBase64(a: Float32Array): string {
-  const bytes = new Uint8Array(a.length * 4);
-  const view = new DataView(bytes.buffer);
-  for (let i = 0; i < a.length; i++) view.setFloat32(i * 4, a[i], true);
-  let bin = '';
-  const CH = 0x8000;
-  for (let i = 0; i < bytes.length; i += CH) bin += String.fromCharCode(...bytes.subarray(i, i + CH));
-  return btoa(bin);
-}
-
-export function base64ToFloat32(s: string): Float32Array {
-  const bin = atob(s);
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const view = new DataView(bytes.buffer);
-  const out = new Float32Array(bytes.length / 4);
-  for (let i = 0; i < out.length; i++) out[i] = view.getFloat32(i * 4, true);
-  return out;
-}
+export { BACKUP_FORMAT, BACKUP_VERSION, base64ToFloat32, float32ToBase64, type BackupFile } from './backupCore';
 
 /** Exporte tous les carnets (y compris la corbeille) ou une sélection. */
 export async function exportBackup(notebookIds?: string[], db: () => Promise<DB> = getDB): Promise<BackupFile> {
-  const d = await db();
-  const tx = d.transaction(['notebooks', 'pages', 'strokes'], 'readonly');
-  let notebooks = (await tx.objectStore('notebooks').getAll()).map((n) => migrateNotebook(n as never));
-  if (notebookIds) notebooks = notebooks.filter((n) => notebookIds.includes(n.id));
-  const pages: Page[] = [];
-  const strokes: SerializedStroke[] = [];
-  for (const nb of notebooks) {
-    const ps = await tx.objectStore('pages').index('notebookId').getAll(nb.id);
-    for (const p of ps) {
-      pages.push(migratePage(p as never));
-      for (const s of await tx.objectStore('strokes').index('pageId').getAll(p.id)) {
-        const m = migrateStroke(s as never);
-        strokes.push({ ...m, points: float32ToBase64(m.points) });
-      }
-    }
-  }
-  await tx.done;
-  return {
-    format: BACKUP_FORMAT,
-    version: BACKUP_VERSION,
-    schema: SCHEMA_VERSION,
-    app: 'Calame',
-    exportedAt: new Date().toISOString(),
-    notebooks,
-    pages,
-    strokes,
-  };
+  return buildBackup((await db()) as unknown as IDBPDatabase<unknown>, notebookIds);
 }
 
 export function serializeBackup(b: BackupFile): Blob {
@@ -103,13 +52,15 @@ export function parseBackup(text: string): BackupFile {
   if (!Array.isArray(b.notebooks) || !Array.isArray(b.pages) || !Array.isArray(b.strokes)) {
     throw new BackupFormatError('Sauvegarde incomplète ou endommagée.');
   }
-  return b as BackupFile;
+  // Version 1 : pas d'objets, de dossiers ni d'images.
+  return { items: [], folders: [], blobs: [], ...b } as BackupFile;
 }
 
 export interface RestoreReport {
   notebooks: number;
   pages: number;
   strokes: number;
+  items: number;
   copies: number;
 }
 
@@ -122,23 +73,37 @@ export interface RestoreReport {
 export async function restoreBackup(b: BackupFile, db: () => Promise<DB> = getDB): Promise<RestoreReport> {
   const d = await db();
   const existing = new Set(await d.getAllKeys('notebooks'));
+  const existingFolders = new Set(await d.getAllKeys('folders'));
   const notebooks = b.notebooks.map((n) => migrateNotebook(n as never));
   const pages = b.pages.map((p) => migratePage(p as never));
   const strokes = b.strokes.map((s) =>
     migrateStroke({ ...(s as unknown as Record<string, unknown>), points: base64ToFloat32(s.points) } as never),
   );
+  const items = (b.items ?? []).map((i) => migrateItem(i as never));
+  const folders = (b.folders ?? []).map((f) => migrateFolder(f as never));
+  const blobs: BlobRecord[] = (b.blobs ?? []).map((x) => ({
+    id: x.id,
+    mime: x.mime,
+    createdAt: x.createdAt,
+    data: base64ToBytes(x.data).buffer as ArrayBuffer,
+  }));
+  const folderIds = new Set([...existingFolders, ...folders.map((f) => f.id)]);
 
   const outNb: Notebook[] = [];
   const outPages: Page[] = [];
   const outStrokes: Stroke[] = [];
+  const outItems: PageItem[] = [];
+  const outFolders: Folder[] = folders.filter((f) => !existingFolders.has(f.id));
   let copies = 0;
-  for (const nb of notebooks) {
+  for (const nb0 of notebooks) {
+    const nb = { ...nb0, folderId: nb0.folderId && folderIds.has(nb0.folderId) ? nb0.folderId : null };
     const nbPages = pages.filter((p) => p.notebookId === nb.id);
     if (!existing.has(nb.id)) {
       outNb.push(nb);
       outPages.push(...nbPages);
       const ids = new Set(nbPages.map((p) => p.id));
       outStrokes.push(...strokes.filter((s) => ids.has(s.pageId)));
+      outItems.push(...items.filter((s) => ids.has(s.pageId)));
       continue;
     }
     copies++;
@@ -155,15 +120,22 @@ export async function restoreBackup(b: BackupFile, db: () => Promise<DB> = getDB
       const np = pageMap.get(s.pageId);
       if (np) outStrokes.push({ ...s, id: newId(), pageId: np });
     }
+    for (const it of items) {
+      const np = pageMap.get(it.pageId);
+      if (np) outItems.push({ ...it, id: newId(), pageId: np });
+    }
   }
 
-  const tx = d.transaction(['notebooks', 'pages', 'strokes'], 'readwrite');
+  const tx = d.transaction(['notebooks', 'pages', 'strokes', 'items', 'folders', 'blobs'], 'readwrite');
   const ops: Promise<unknown>[] = [];
+  for (const f of outFolders) ops.push(tx.objectStore('folders').put(f));
+  for (const bl of blobs) ops.push(tx.objectStore('blobs').put(bl));
   for (const n of outNb) ops.push(tx.objectStore('notebooks').add(n));
   for (const p of outPages) ops.push(tx.objectStore('pages').put(p));
   for (const s of outStrokes) ops.push(tx.objectStore('strokes').put(s));
+  for (const it of outItems) ops.push(tx.objectStore('items').put(it));
   await Promise.all([...ops, tx.done]);
-  return { notebooks: outNb.length, pages: outPages.length, strokes: outStrokes.length, copies };
+  return { notebooks: outNb.length, pages: outPages.length, strokes: outStrokes.length, items: outItems.length, copies };
 }
 
 export function backupFileName(prefix = 'calame-sauvegarde'): string {

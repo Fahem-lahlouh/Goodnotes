@@ -41,6 +41,32 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # Vérifie la version réellement servie (et non une copie en cache du CDN) : version.json doit
+  # annoncer le commit déployé, et le service worker doit être servi.
+  verify:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Version servie
+        env:
+          URL: ${{ needs.deploy.outputs.url }}
+        run: |
+          expected="${GITHUB_SHA::7}"
+          for i in $(seq 1 30); do
+            served=$(curl -fsS "${URL}version.json?nocache=$(date +%s)" | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' || true)
+            echo "essai $i : servi=${served:-?} attendu=$expected"
+            if [ "$served" = "$expected" ]; then
+              curl -fsS -o /dev/null "${URL}sw.js" && curl -fsS -o /dev/null "${URL}manifest.webmanifest"
+              echo "Version $expected servie sur $URL"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "La version servie ne correspond pas au commit déployé" >&2
+          exit 1

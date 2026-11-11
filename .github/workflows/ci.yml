@@ -11,7 +11,7 @@ permissions:
 jobs:
   checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,13 +27,24 @@ jobs:
         run: npm run build
       - name: Contrôle des secrets
         run: node scripts/check-secrets.mjs
-      - name: Navigateurs Playwright
-        run: npx playwright install --with-deps chromium webkit
-      - name: Tests de bout en bout (Chromium bureau + iPad émulé)
+
+  # Tests de bout en bout dans l'image officielle Playwright : navigateurs et dépendances système
+  # déjà installés (aucun appel aux miroirs apt, dont l'indisponibilité bloquait la CI).
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --user 1001
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm run build
+      - name: Chromium (bureau + iPad émulé)
         run: npx playwright test --trace off
       # WebKit (moteur de Safari), iPad Pro 11 émulé. Les tests pilotant le stylet via le
       # protocole Chromium (@cdp) en sont exclus.
-      - name: Tests de bout en bout WebKit iPad
+      - name: WebKit iPad
         run: npx playwright test --trace off --project webkit-ipad
         env:
           WEBKIT: '1'

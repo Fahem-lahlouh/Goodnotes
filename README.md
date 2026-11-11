@@ -3,25 +3,29 @@
 Carnets manuscrits personnels pour **iPad et Apple Pencil**, sous forme d'application web installable (PWA).
 Goodnotes sert de référence fonctionnelle ; Calame a sa propre identité (nom, logo, interface).
 
-> **État : étape 1 terminée (fondations + moteur d'écriture), étape 2 en partie.**
+> **État : étapes 1 et 2 en grande partie réalisées ; PDF, verrouillage local et reconnaissance restent à faire.**
 > **Aucune base de données, aucun serveur, 100 % gratuit** : les notes sont stockées uniquement sur l'appareil
 > (IndexedDB). Exportez régulièrement une sauvegarde (bouton dans l'éditeur) dans Fichiers ou iCloud Drive. Détail : [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ## Ce qui fonctionne aujourd'hui
 
-- Écriture au stylet avec pression (et inclinaison si activée), lissage réglable, points prédits.
-- Mode « stylet pour écrire, doigts pour naviguer » (automatique dès qu'un Apple Pencil est détecté).
-- Stylo, surligneur (sous l'encre), gomme par trait ou partielle, lasso (déplacer, redimensionner, dupliquer, recolorer, supprimer).
-- Annuler / rétablir (boutons, ⌘Z / ⇧⌘Z, toucher à deux / trois doigts).
-- Zoom et défilement à deux doigts, à la molette / trackpad ; traits nets à tout niveau de zoom ; rotation de l'iPad.
-- Bibliothèque : carnets avec couverture et papier (blanc, ligné, quadrillé, pointillé), récents, favoris, recherche par titre, corbeille.
-- Pages : ajout, duplication, suppression, réordonnancement, miniatures.
-- Enregistrement local automatique trait par trait, reprise à la même position.
-- Deux indicateurs : « Enregistré sur cet appareil » et âge de la dernière sauvegarde exportée (un toucher = export).
-- Protection multi-onglets (un seul onglet écrit, les autres en lecture seule et à jour).
-- Sauvegarde complète exportable et restauration sans écrasement.
-- Fonctionnement hors ligne après la première visite ; mises à jour appliquées seulement à la demande.
-- Thèmes clair et sombre, barre d'outils repositionnable, mode concentration, raccourcis clavier.
+- **Écriture** : stylo à bille, plume (pleins et déliés), pinceau, crayon, surligneur ; épaisseur, palette et couleurs
+  personnalisées, lissage, pression et inclinaison ; aperçu exact du trait ; favoris ; réglages mémorisés par outil.
+- **Doigt** : bouton visible « Doigt : écrit / navigue » (stylet uniquement, ou doigt et stylet avec deux doigts pour naviguer).
+- **Gomme** trait entier ou partielle, diamètre réglable (préréglages + curseur) avec aperçu exact, y compris au zoom.
+- **Sélection** lasso, rectangle ou carré ; règle explicite (entièrement inclus / touchés) ; filtres traits / textes / images ;
+  déplacer, redimensionner, dupliquer, copier-coller, recolorer, épaissir, supprimer.
+- **Annuler / rétablir** fiables (par document, la page concernée est affichée d'abord), raccourcis ⌘Z / ⇧⌘Z / Ctrl+Y.
+- **Pages** : navigation horizontale par défaut (balayage, arrêt net, compteur, boutons), verticale en option ; miniatures ;
+  chargement des pages à la demande.
+- **Texte** saisi (5 polices, taille, gras, italique, souligné, alignement) et **images**.
+- **Bibliothèque** : dossiers, favoris, récents, tri, recherche, corbeille ; formats A3–A7, Lettre, Tabloïd, portrait/paysage ;
+  papier blanc, jaune, crème ou sombre ; modèles (ligné, quadrillé, pointillé, Cornell, colonnes, tâches, semainier, mensuel,
+  réunion, brainstorming, révision Java, fiches Q/R) ; note rapide ; tableau blanc (grande page).
+- **Plein écran** réel (API du navigateur), **mode concentration**, et mode application depuis l'écran d'accueil.
+- **Données** : enregistrement automatique trait par trait, âge de la dernière sauvegarde visible (export en un toucher),
+  sauvegarde `.calame` complète et restauration sans écrasement, copie de sécurité automatique avant toute mise à niveau du format,
+  protection multi-onglets, hors ligne, mises à jour à la demande.
 
 La liste complète, avec ce qui **n'est pas** encore fait : [docs/FEATURES.md](docs/FEATURES.md).
 
@@ -57,9 +61,8 @@ Résultats et limites : [docs/TESTS.md](docs/TESTS.md).
 
 ## Déploiement (GitHub Pages)
 
-1. Dans le dépôt GitHub : **Settings → Pages → Build and deployment → Source : GitHub Actions**.
-2. Fusionner sur `main` : le workflow `Déploiement GitHub Pages` construit et publie `dist/`.
-3. Adresse attendue : `https://fahem-lahlouh.github.io/Goodnotes/`.
+Chaque fusion sur `main` construit, publie, puis **vérifie la version réellement servie** (`version.json` doit correspondre
+au commit déployé). Adresse : **https://fahem-lahlouh.github.io/Goodnotes/**.
 
 GitHub Pages publie **l'interface** (code public, gratuit pour un dépôt public). Il ne stocke aucune note : vos notes
 restent dans le navigateur de votre iPad et ne sont jamais envoyées. Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -70,6 +73,8 @@ restent dans le navigateur de votre iPad et ne sont jamais envoyées. Voir [docs
 | --- | --- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Architecture, choix techniques, hébergement, sécurité |
 | [docs/FEATURES.md](docs/FEATURES.md) | Matrice des fonctionnalités et état réel |
+| [docs/CORRECTIONS.md](docs/CORRECTIONS.md) | Corrections du 11/11/2026 : cause, correction, test, limites |
+| [docs/AUDIT.md](docs/AUDIT.md) | Audit de Goodnotes et tableau de suivi |
 | [docs/IPAD.md](docs/IPAD.md) | Installation sur iPad et procédure de validation manuelle |
 | [docs/BACKUP.md](docs/BACKUP.md) | Sauvegarde et restauration |
 | [docs/FORMAT.md](docs/FORMAT.md) | Format de données et fichier `.calame` |

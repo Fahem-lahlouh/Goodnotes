@@ -22,6 +22,11 @@ describe('Migrations de données', () => {
     expect(n).toMatchObject({ favorite: false, trashedAt: null, openedAt: 2, cover: 'nuit', v: SCHEMA_VERSION });
   });
 
+  it('migre un carnet v1 vers v2 (dossier, format, orientation, type)', () => {
+    const n = migrateNotebook({ id: 'n', title: 'x', pageIds: [], cover: 'sauge', favorite: true, trashedAt: null, openedAt: 1, createdAt: 1, updatedAt: 1, v: 1 });
+    expect(n).toMatchObject({ folderId: null, format: 'A4', orientation: 'portrait', kind: 'notebook', coverPattern: 'plain', cover: 'sauge', favorite: true, v: 2 });
+  });
+
   it('laisse intact un enregistrement à jour', () => {
     const raw = { id: 'n', title: 'x', pageIds: ['a'], v: SCHEMA_VERSION, favorite: true };
     expect(migrateNotebook(raw)).toBe(raw);

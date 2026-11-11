@@ -10,21 +10,25 @@ _Mis à jour à chaque session. Le produit n'est **pas terminé**._
 - PWA : manifeste, icônes, service worker hors ligne, mises à jour contrôlées.
 - CI (types, unitaires, build, secrets, e2e) et déploiement GitHub Pages.
 
+## Corrections et améliorations du 11/11/2026 : ✅
+Plein écran réel, quatre outils d'écriture distincts, favoris, gomme réglable, historique fiabilisé, navigation horizontale,
+mode doigt explicite, sélections lasso/rectangle/carré, texte et images, refonte du design, formats et modèles, dossiers,
+copie de sécurité automatique avant mise à niveau. Détail : [CORRECTIONS.md](CORRECTIONS.md), inventaire : [AUDIT.md](AUDIT.md).
+
 ## Étape 2 — Application quotidienne : 🔶 en cours
-Fait : bibliothèque (carnets, couvertures, papiers, récents, favoris, recherche titres, corbeille), pages
-multiples (ajout, duplication, suppression, réordonnancement, miniatures), sauvegarde/restauration,
-protection multi-onglets, thèmes, barre d'outils repositionnable, mode concentration, raccourcis.
+Fait : bibliothèque (barre latérale, carnets, couvertures, formats, modèles, récents, favoris, tri, recherche titres,
+dossiers, corbeille), pages (ajout, duplication, suppression, réordonnancement, miniatures paresseuses), texte, images,
+sauvegarde/restauration v2, protection multi-onglets, thèmes, plein écran / concentration, raccourcis.
 
-Reste :
+Reste (par priorité) :
 1. Retours de la validation iPad ([IPAD.md](IPAD.md)) → corrections du moteur en priorité.
-2. Dossiers ; signets et étiquettes ; couleurs favorites personnalisables.
-3. Verrouillage de l'espace local (code + Web Crypto) — conception : clé AES-GCM dérivée par PBKDF2,
-   verrouillage après inactivité, récupération uniquement via sauvegarde exportée.
-4. Glisser-déposer des pages ; renommer depuis l'éditeur.
-5. Palette de commandes (⌘K), capture rapide.
+2. Verrouillage de l'espace local (code + Web Crypto, AES-GCM / PBKDF2).
+3. Import / annotation / export PDF (PDF.js, rendu progressif).
+4. Recherche dans le texte des blocs ; signets et étiquettes ; sous-dossiers.
+5. Glisser-déposer des pages ; renommer depuis l'éditeur ; palette de commandes (⌘K).
 
-## Étape 3 — Documents : ⬜
-- Import PDF (pdf.js, rendu progressif), annotation, export PDF/image ; texte, images, formes.
+## Étape 3 — Documents : 🔶
+- Fait : blocs de texte, images. À faire : import PDF (pdf.js, rendu progressif), annotation, export PDF/image, formes.
 - Synchronisation : **retirée du périmètre** (décision du 11/11/2026 : aucune base, 100 % gratuit). Copie entre
   appareils par fichier `.calame`.
 

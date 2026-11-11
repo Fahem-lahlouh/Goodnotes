@@ -1,62 +1,123 @@
-import type { Notebook, Page, Stroke } from './types';
+import type { Notebook, Page, PageItem, Stroke } from './types';
 
 /**
  * État en mémoire d'un carnet ouvert + historique annuler/rétablir.
  *
- * Toute modification de traits passe par `apply()` sous forme de « changements »
+ * Portée de l'historique : LE DOCUMENT (le carnet), 500 étapes, non conservé après
+ * fermeture. Chaque étape mémorise la page qu'elle concerne : l'interface affiche
+ * cette page avant d'annuler ou de rétablir, pour ne jamais modifier une page invisible.
+ * Les opérations sur les pages (ajout, déplacement, suppression) ne font pas partie de
+ * l'historique ; supprimer une page retire de l'historique les étapes qui la concernent.
+ *
+ * Toute modification passe par `apply()` sous forme de « changements »
  * {before, after} : before absent = création, after absent = suppression.
- * L'annulation réapplique les `before`, le rétablissement les `after`.
- * Les traits sont immuables : une modification remplace l'objet.
+ * Les éléments sont immuables : une modification remplace l'objet.
  */
-export interface StrokeChange {
-  id: string;
-  pageId: string;
-  before?: Stroke;
-  after?: Stroke;
-}
+export type ElementKind = 'stroke' | 'item';
+
+export type Change =
+  | { kind: 'stroke'; id: string; pageId: string; before?: Stroke; after?: Stroke }
+  | { kind: 'item'; id: string; pageId: string; before?: PageItem; after?: PageItem };
 
 export interface ChangeSet {
   label: string;
-  changes: StrokeChange[];
+  pageId: string;
+  changes: Change[];
+}
+
+export interface PersistDelta {
+  strokesPut: Stroke[];
+  strokesDel: string[];
+  itemsPut: PageItem[];
+  itemsDel: string[];
+  pageIds: string[];
 }
 
 export interface SessionPersistence {
-  saveStrokes(notebookId: string, put: Stroke[], del: string[]): void;
+  save(notebookId: string, delta: PersistDelta): void;
 }
+
+export type PageLoader = (pageId: string) => Promise<{ strokes: Stroke[]; items: PageItem[] }>;
 
 export interface SessionEvent {
   pages: Set<string>;
-  /** Vrai si seuls des traits ont été ajoutés (permet un rendu incrémental). */
+  /** Vrai si seuls des éléments ont été ajoutés au-dessus des autres (rendu incrémental possible). */
   additiveOnly: boolean;
   added: Stroke[];
+  /** Vrai si l'événement provient d'un chargement de page (pas d'une modification). */
+  loaded?: boolean;
 }
 
-const MAX_HISTORY = 200;
+export const MAX_HISTORY = 500;
 
 export class NotebookSession {
   notebook: Notebook;
   pages = new Map<string, Page>();
   private strokes = new Map<string, Map<string, Stroke>>();
-  private sorted = new Map<string, Stroke[]>();
+  private items = new Map<string, Map<string, PageItem>>();
+  private sortedStrokes = new Map<string, Stroke[]>();
+  private sortedItems = new Map<string, PageItem[]>();
+  private loading = new Map<string, Promise<void>>();
   private undoStack: ChangeSet[] = [];
   private redoStack: ChangeSet[] = [];
-  private batch: { label: string; map: Map<string, StrokeChange> } | null = null;
+  private batch: { label: string; pageId: string; map: Map<string, Change> } | null = null;
   private listeners = new Set<(e: SessionEvent) => void>();
   private historyListeners = new Set<() => void>();
-  readOnly = false;
+  private _readOnly = false;
 
   constructor(
     notebook: Notebook,
     pages: Page[],
-    strokes: Stroke[],
     private readonly persistence: SessionPersistence,
+    private readonly loader: PageLoader = async () => ({ strokes: [], items: [] }),
+    preloaded?: { strokes: Stroke[]; items?: PageItem[] },
   ) {
     this.notebook = notebook;
-    for (const p of pages) {
-      this.pages.set(p.id, p);
-      this.strokes.set(p.id, new Map());
+    for (const p of pages) this.pages.set(p.id, p);
+    if (preloaded) {
+      for (const p of pages) this.setPageContent(p.id, [], []);
+      for (const s of preloaded.strokes) this.strokes.get(s.pageId)?.set(s.id, s);
+      for (const i of preloaded.items ?? []) this.items.get(i.pageId)?.set(i.id, i);
     }
-    for (const s of strokes) this.strokes.get(s.pageId)?.set(s.id, s);
+  }
+
+  // ---------- Chargement paresseux ----------
+
+  isLoaded(pageId: string): boolean {
+    return this.strokes.has(pageId);
+  }
+
+  /** Charge le contenu d'une page si nécessaire (une seule fois). */
+  ensurePage(pageId: string): Promise<void> {
+    if (this.strokes.has(pageId) || !this.pages.has(pageId)) return Promise.resolve();
+    let p = this.loading.get(pageId);
+    if (!p) {
+      p = this.loader(pageId).then(
+        (c) => {
+          this.loading.delete(pageId);
+          if (this.strokes.has(pageId) || !this.pages.has(pageId)) return;
+          this.setPageContent(pageId, c.strokes, c.items);
+          for (const l of this.listeners) l({ pages: new Set([pageId]), additiveOnly: false, added: [], loaded: true });
+        },
+        (e) => {
+          this.loading.delete(pageId);
+          throw e;
+        },
+      );
+      this.loading.set(pageId, p);
+    }
+    return p;
+  }
+
+  private setPageContent(pageId: string, strokes: Stroke[], items: PageItem[]): void {
+    const sm = new Map<string, Stroke>();
+    for (const s of strokes) sm.set(s.id, s);
+    const im = new Map<string, PageItem>();
+    for (const i of items) im.set(i.id, i);
+    this.strokes.set(pageId, sm);
+    this.items.set(pageId, im);
+    this.sortedStrokes.delete(pageId);
+    this.sortedItems.delete(pageId);
   }
 
   // ---------- Lecture ----------
@@ -65,14 +126,29 @@ export class NotebookSession {
     return this.notebook.pageIds.map((id) => this.pages.get(id)).filter((p): p is Page => !!p);
   }
 
+  pageIndex(pageId: string): number {
+    return this.notebook.pageIds.indexOf(pageId);
+  }
+
   /** Traits d'une page triés par ordre d'empilement (tableau mis en cache). */
   getStrokes(pageId: string): Stroke[] {
-    let arr = this.sorted.get(pageId);
+    let arr = this.sortedStrokes.get(pageId);
     if (!arr) {
       arr = Array.from(this.strokes.get(pageId)?.values() ?? []).sort(
         (a, b) => a.order - b.order || (a.id < b.id ? -1 : 1),
       );
-      this.sorted.set(pageId, arr);
+      this.sortedStrokes.set(pageId, arr);
+    }
+    return arr;
+  }
+
+  getItems(pageId: string): PageItem[] {
+    let arr = this.sortedItems.get(pageId);
+    if (!arr) {
+      arr = Array.from(this.items.get(pageId)?.values() ?? []).sort(
+        (a, b) => a.order - b.order || (a.id < b.id ? -1 : 1),
+      );
+      this.sortedItems.set(pageId, arr);
     }
     return arr;
   }
@@ -81,18 +157,51 @@ export class NotebookSession {
     return this.strokes.get(pageId)?.get(id);
   }
 
+  getItem(pageId: string, id: string): PageItem | undefined {
+    return this.items.get(pageId)?.get(id);
+  }
+
   strokeCount(): number {
     let n = 0;
     for (const m of this.strokes.values()) n += m.size;
     return n;
   }
 
+  itemCount(): number {
+    let n = 0;
+    for (const m of this.items.values()) n += m.size;
+    return n;
+  }
+
+  get readOnly(): boolean {
+    return this._readOnly;
+  }
+
+  set readOnly(v: boolean) {
+    if (v === this._readOnly) return;
+    this._readOnly = v;
+    this.emitHistory();
+  }
+
   get canUndo(): boolean {
-    return this.undoStack.length > 0 && !this.readOnly;
+    return this.undoStack.length > 0 && !this._readOnly && !this.batch;
   }
 
   get canRedo(): boolean {
-    return this.redoStack.length > 0 && !this.readOnly;
+    return this.redoStack.length > 0 && !this._readOnly && !this.batch;
+  }
+
+  /** Étape qui serait annulée (pour afficher sa page d'abord). */
+  peekUndo(): ChangeSet | undefined {
+    return this.undoStack[this.undoStack.length - 1];
+  }
+
+  peekRedo(): ChangeSet | undefined {
+    return this.redoStack[this.redoStack.length - 1];
+  }
+
+  get historySize(): { undo: number; redo: number } {
+    return { undo: this.undoStack.length, redo: this.redoStack.length };
   }
 
   // ---------- Abonnements ----------
@@ -107,13 +216,13 @@ export class NotebookSession {
     return () => this.historyListeners.delete(fn);
   }
 
-  private emit(changes: StrokeChange[]): void {
+  private emit(changes: Change[]): void {
     const pages = new Set<string>();
     let additiveOnly = true;
     const added: Stroke[] = [];
     for (const c of changes) {
       pages.add(c.pageId);
-      if (c.before || !c.after) additiveOnly = false;
+      if (c.kind !== 'stroke' || c.before || !c.after) additiveOnly = false;
       else added.push(c.after);
     }
     for (const l of this.listeners) l({ pages, additiveOnly, added });
@@ -125,48 +234,76 @@ export class NotebookSession {
 
   // ---------- Écriture ----------
 
-  private applyRaw(changes: StrokeChange[], direction: 'after' | 'before'): void {
+  private applyRaw(changes: Change[], direction: 'after' | 'before'): void {
     for (const c of changes) {
-      const m = this.strokes.get(c.pageId);
-      if (!m) continue;
-      const target = c[direction];
-      if (target) m.set(c.id, target);
-      else m.delete(c.id);
-      this.sorted.delete(c.pageId);
+      if (c.kind === 'stroke') {
+        const m = this.strokes.get(c.pageId);
+        if (!m) continue;
+        const t = c[direction];
+        if (t) m.set(c.id, t);
+        else m.delete(c.id);
+        this.sortedStrokes.delete(c.pageId);
+      } else {
+        const m = this.items.get(c.pageId);
+        if (!m) continue;
+        const t = c[direction];
+        if (t) m.set(c.id, t);
+        else m.delete(c.id);
+        this.sortedItems.delete(c.pageId);
+      }
     }
   }
 
-  private persist(changes: StrokeChange[], direction: 'after' | 'before'): void {
-    const put: Stroke[] = [];
-    const del: string[] = [];
+  private persist(changes: Change[], direction: 'after' | 'before'): void {
+    const d: PersistDelta = { strokesPut: [], strokesDel: [], itemsPut: [], itemsDel: [], pageIds: [] };
+    const pages = new Set<string>();
     for (const c of changes) {
-      const t = c[direction];
-      if (t) put.push(t);
-      else del.push(c.id);
+      pages.add(c.pageId);
+      if (c.kind === 'stroke') {
+        const t = c[direction];
+        if (t) d.strokesPut.push(t);
+        else d.strokesDel.push(c.id);
+      } else {
+        const t = c[direction];
+        if (t) d.itemsPut.push(t);
+        else d.itemsDel.push(c.id);
+      }
     }
-    if (put.length || del.length) this.persistence.saveStrokes(this.notebook.id, put, del);
+    d.pageIds = Array.from(pages);
+    if (d.strokesPut.length || d.strokesDel.length || d.itemsPut.length || d.itemsDel.length) {
+      this.persistence.save(this.notebook.id, d);
+    }
   }
 
   /** Applique des changements (enregistrés dans l'historique et persistés). */
-  apply(changes: StrokeChange[], label: string): void {
-    if (this.readOnly || changes.length === 0) return;
+  apply(changes: Change[], label: string): boolean {
+    if (this._readOnly || changes.length === 0) return false;
     this.applyRaw(changes, 'after');
     if (this.batch) {
       for (const c of changes) {
-        const prev = this.batch.map.get(c.id);
-        if (prev) prev.after = c.after;
-        else this.batch.map.set(c.id, { ...c });
+        const key = `${c.kind}:${c.id}`;
+        const prev = this.batch.map.get(key);
+        if (prev) (prev as { after?: unknown }).after = c.after;
+        else this.batch.map.set(key, { ...c } as Change);
       }
     } else {
       this.persist(changes, 'after');
-      this.pushUndo({ label, changes });
+      this.pushUndo({ label, pageId: changes[0].pageId, changes });
     }
     this.emit(changes);
+    return true;
   }
 
   /** Regroupe plusieurs `apply` (ex. un geste de gomme) en une seule étape d'annulation. */
-  beginBatch(label: string): void {
-    if (!this.batch) this.batch = { label, map: new Map() };
+  beginBatch(label: string, pageId: string): void {
+    if (!this.batch) {
+      this.batch = { label, pageId, map: new Map() };
+      this.emitHistory();
+    }
+  }
+
+  get inBatch(): boolean {
+    return !!this.batch;
   }
 
   endBatch(): void {
@@ -174,20 +311,24 @@ export class NotebookSession {
     this.batch = null;
     if (!b) return;
     const net = Array.from(b.map.values()).filter((c) => c.before || c.after);
-    if (net.length === 0) return;
+    if (net.length === 0) {
+      this.emitHistory();
+      return;
+    }
     this.persist(net, 'after');
-    this.pushUndo({ label: b.label, changes: net });
+    this.pushUndo({ label: b.label, pageId: net[0].pageId, changes: net });
   }
 
   private pushUndo(cs: ChangeSet): void {
     this.undoStack.push(cs);
     if (this.undoStack.length > MAX_HISTORY) this.undoStack.shift();
+    // Une nouvelle modification invalide la branche de rétablissement.
     this.redoStack = [];
     this.emitHistory();
   }
 
   undo(): ChangeSet | undefined {
-    if (!this.canUndo || this.batch) return;
+    if (!this.canUndo) return;
     const cs = this.undoStack.pop()!;
     const rev = cs.changes.slice().reverse();
     this.applyRaw(rev, 'before');
@@ -199,7 +340,7 @@ export class NotebookSession {
   }
 
   redo(): ChangeSet | undefined {
-    if (!this.canRedo || this.batch) return;
+    if (!this.canRedo) return;
     const cs = this.redoStack.pop()!;
     this.applyRaw(cs.changes, 'after');
     this.persist(cs.changes, 'after');
@@ -211,19 +352,18 @@ export class NotebookSession {
 
   // ---------- Pages ----------
 
-  addPage(page: Page, extraStrokes: Stroke[] = []): void {
+  addPage(page: Page, content?: { strokes?: Stroke[]; items?: PageItem[] }): void {
     this.pages.set(page.id, page);
-    const m = new Map<string, Stroke>();
-    for (const s of extraStrokes) m.set(s.id, s);
-    this.strokes.set(page.id, m);
-    this.sorted.delete(page.id);
+    this.setPageContent(page.id, content?.strokes ?? [], content?.items ?? []);
   }
 
   removePage(pageId: string): void {
     this.pages.delete(pageId);
     this.strokes.delete(pageId);
-    this.sorted.delete(pageId);
-    // L'historique ne doit pas pouvoir recréer des traits sur une page supprimée.
+    this.items.delete(pageId);
+    this.sortedStrokes.delete(pageId);
+    this.sortedItems.delete(pageId);
+    // L'historique ne doit pas pouvoir recréer des éléments sur une page supprimée.
     const keep = (cs: ChangeSet) => cs.changes.every((c) => c.pageId !== pageId);
     this.undoStack = this.undoStack.filter(keep);
     this.redoStack = this.redoStack.filter(keep);
@@ -235,14 +375,12 @@ export class NotebookSession {
   }
 
   /**
-   * Remplace les traits d'une page par l'état stocké (modification venue d'un autre onglet).
+   * Remplace le contenu d'une page par l'état stocké (modification venue d'un autre onglet).
    * L'historique local est vidé : il pourrait sinon écraser le travail de l'autre onglet.
    */
-  reloadPage(pageId: string, strokes: Stroke[]): void {
-    const m = new Map<string, Stroke>();
-    for (const s of strokes) m.set(s.id, s);
-    this.strokes.set(pageId, m);
-    this.sorted.delete(pageId);
+  reloadPage(pageId: string, content: { strokes: Stroke[]; items: PageItem[] }): void {
+    if (!this.pages.has(pageId)) return;
+    this.setPageContent(pageId, content.strokes, content.items);
     this.undoStack = [];
     this.redoStack = [];
     this.emitHistory();

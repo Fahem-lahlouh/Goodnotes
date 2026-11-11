@@ -2,6 +2,20 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { readFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+
+/** Version servie : commit court (CI : GITHUB_SHA) + date de build. Affichée dans Réglages et dans version.json. */
+function appVersion(): string {
+  const sha = process.env.GITHUB_SHA?.slice(0, 7);
+  if (sha) return sha;
+  try {
+    return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+  } catch {
+    return 'dev';
+  }
+}
+const APP_VERSION = appVersion();
+const BUILD_TIME = new Date().toISOString();
 
 /**
  * Génère `sw.js` après le build avec la liste exacte des fichiers à précacher
@@ -16,10 +30,12 @@ function serviceWorker(): Plugin {
       template = readFileSync(new URL('./src/pwa/sw-template.js', import.meta.url), 'utf8');
     },
     generateBundle(_opts, bundle) {
-      const files = Object.keys(bundle).filter((f) => !f.endsWith('.map'));
+      const files = Object.keys(bundle).filter((f) => !f.endsWith('.map') && f !== 'version.json');
       const statics = ['./', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/icon.svg'];
       const assets = Array.from(new Set([...statics, ...files]));
-      const version = Date.now().toString(36);
+      const version = `${APP_VERSION}-${Date.now().toString(36)}`;
+      // version.json n'est PAS précaché : il reflète toujours la version réellement servie.
+      this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ version: APP_VERSION, build: BUILD_TIME, sw: version }) });
       const code = template
         .replace('__CALAME_VERSION__', version)
         .replace('__CALAME_ASSETS__', JSON.stringify(assets));
@@ -53,6 +69,10 @@ function contentSecurityPolicy(): Plugin {
 
 export default defineConfig({
   base: './',
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+    __BUILD_TIME__: JSON.stringify(BUILD_TIME),
+  },
   plugins: [react(), serviceWorker(), contentSecurityPolicy()],
   build: { target: 'safari16', sourcemap: true },
   server: { host: true },

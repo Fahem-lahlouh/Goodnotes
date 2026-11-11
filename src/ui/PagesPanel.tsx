@@ -1,45 +1,54 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { NotebookSession } from '../model/session';
 import type { Page } from '../model/types';
-import { drawPaper } from '../ink/paper';
-import { drawStrokes } from '../ink/strokeRender';
+import { renderPageContent } from '../ink/pageRender';
+import { repo } from '../storage/repo';
 import { Icon } from './icons';
 
 const THUMB_W = 112;
 
+/**
+ * Miniature rendue seulement quand elle devient visible dans le panneau.
+ * Pour une page non chargée dans l'éditeur, son contenu est lu le temps du rendu
+ * puis libéré (les pages ne sont pas toutes gardées en mémoire).
+ */
 function Thumb({ session, page, version }: { session: NotebookSession; page: Page; version: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const [visible, setVisible] = useState(false);
+  const k = THUMB_W / page.width;
+  const h = Math.round(page.height * k);
+
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
-    // Rendu différé pour ne pas gêner l'écriture.
-    const handle = requestIdleCallbackSafe(() => {
+    const io = new IntersectionObserver((entries) => setVisible(entries.some((e) => e.isIntersecting)), { rootMargin: '200px' });
+    io.observe(c);
+    return () => io.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const c = ref.current;
+    if (!c || !visible) return;
+    let cancelled = false;
+    const t = window.setTimeout(async () => {
+      const content = session.isLoaded(page.id)
+        ? { strokes: session.getStrokes(page.id), items: session.getItems(page.id) }
+        : await repo.loadPageContent(page.id).catch(() => ({ strokes: [], items: [] }));
+      if (cancelled) return;
       const dpr = Math.min(2, window.devicePixelRatio || 1);
-      const k = THUMB_W / page.width;
-      const h = Math.round(page.height * k);
       c.width = THUMB_W * dpr;
       c.height = h * dpr;
-      c.style.width = `${THUMB_W}px`;
-      c.style.height = `${h}px`;
       const ctx = c.getContext('2d')!;
       ctx.setTransform(k * dpr, 0, 0, k * dpr, 0, 0);
-      drawPaper(ctx, page.width, page.height, page.paper, k);
-      drawStrokes(ctx, session.getStrokes(page.id));
-    });
-    return () => cancelIdleCallbackSafe(handle);
-  }, [session, page, version]);
-  return <canvas ref={ref} className="thumb" aria-hidden="true" />;
-}
+      renderPageContent(ctx, page, content.strokes, content.items, k);
+    }, 60);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [session, page, version, visible, h, k]);
 
-type IdleHandle = number;
-function requestIdleCallbackSafe(fn: () => void): IdleHandle {
-  const w = window as Window & { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => number };
-  return w.requestIdleCallback ? w.requestIdleCallback(fn, { timeout: 500 }) : window.setTimeout(fn, 60);
-}
-function cancelIdleCallbackSafe(h: IdleHandle): void {
-  const w = window as Window & { cancelIdleCallback?: (h: number) => void };
-  if (w.cancelIdleCallback) w.cancelIdleCallback(h);
-  else clearTimeout(h);
+  return <canvas ref={ref} className="thumb" style={{ width: THUMB_W, height: h }} aria-hidden="true" />;
 }
 
 export function PagesPanel({
@@ -74,6 +83,7 @@ export function PagesPanel({
     <aside className="pages-panel" aria-label="Pages">
       <header className="pages-head">
         <strong>Pages</strong>
+        <span className="muted small">{pages.length}</span>
         <button className="icon-btn" onClick={onClose} aria-label="Fermer le panneau des pages">
           <Icon name="close" size={18} />
         </button>
@@ -81,18 +91,18 @@ export function PagesPanel({
       <ol className="pages-list" ref={listRef}>
         {pages.map((p, i) => (
           <li key={p.id} className={i === current ? 'is-current' : ''}>
-            <button className="thumb-btn" onClick={() => onGo(i)} aria-label={`Aller à la page ${i + 1}`} aria-current={i === current}>
+            <button className="thumb-btn" onClick={() => onGo(i)} aria-label={`Aller à la page ${i + 1}`} aria-current={i === current ? 'page' : undefined}>
               <Thumb session={session} page={p} version={version} />
             </button>
             <div className="thumb-bar">
-              <span className="small">{i + 1}</span>
+              <span className="small thumb-num">{i + 1}</span>
               {!readOnly && (
                 <span className="thumb-actions">
-                  <button className="icon-btn sm" disabled={i === 0} onClick={() => onMove(p.id, i - 1)} aria-label="Monter la page" title="Monter">
-                    ↑
+                  <button className="icon-btn sm" disabled={i === 0} onClick={() => onMove(p.id, i - 1)} aria-label="Avancer la page" title="Avancer">
+                    <Icon name="chevronLeft" size={15} />
                   </button>
-                  <button className="icon-btn sm" disabled={i === pages.length - 1} onClick={() => onMove(p.id, i + 1)} aria-label="Descendre la page" title="Descendre">
-                    ↓
+                  <button className="icon-btn sm" disabled={i === pages.length - 1} onClick={() => onMove(p.id, i + 1)} aria-label="Reculer la page" title="Reculer">
+                    <Icon name="chevronRight" size={15} />
                   </button>
                   <button className="icon-btn sm" onClick={() => onDuplicate(p.id)} aria-label="Dupliquer la page" title="Dupliquer">
                     <Icon name="duplicate" size={15} />
@@ -108,7 +118,7 @@ export function PagesPanel({
       </ol>
       {!readOnly && (
         <button className="btn btn-small pages-add" onClick={() => onAdd(pages.length)}>
-          <Icon name="plus" size={16} /> Ajouter une page
+          <Icon name="plus" size={16} /> Ajouter une page à la fin
         </button>
       )}
     </aside>

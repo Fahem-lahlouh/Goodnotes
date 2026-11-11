@@ -43,6 +43,28 @@ describe('Repo — persistance locale', () => {
     expect(c.strokes.filter((s) => s.pageId === dup.page.id)).toHaveLength(0);
   });
 
+  it('formats de page, orientation, dossiers et objets', async () => {
+    const { repo } = freshDB();
+    const folder = await repo.createFolder('Cours');
+    const nb = await repo.createNotebook({ title: 'Paysage', cover: 'sauge', format: 'A5', orientation: 'landscape', folderId: folder.id });
+    const c = (await repo.loadNotebookContent(nb.id))!;
+    expect(c.pages[0]).toMatchObject({ width: 794, height: 559 });
+    expect(c.notebook).toMatchObject({ format: 'A5', orientation: 'landscape', folderId: folder.id, coverPattern: 'plain' });
+    const p2 = await repo.insertPage(nb.id, 1, nb.paper);
+    expect(p2).toMatchObject({ width: 794, height: 559 });
+    await repo.saveChanges(nb.id, {
+      strokesPut: [], strokesDel: [], itemsDel: [],
+      itemsPut: [{ kind: 'image', id: 'img', pageId: nb.pageIds[0], x: 0, y: 0, w: 10, h: 10, blobId: 'b1', mime: 'image/png', order: 1, createdAt: 0, v: 2 }],
+    });
+    await repo.putBlob({ id: 'b1', mime: 'image/png', data: new Uint8Array([1, 2, 3]).buffer, createdAt: 0 });
+    const dup = await repo.duplicatePage(nb.id, nb.pageIds[0]);
+    expect(dup.items).toHaveLength(1);
+    await repo.deleteFolder(folder.id);
+    expect((await repo.getNotebook(nb.id))!.folderId).toBeNull();
+    await repo.deleteNotebookForever(nb.id);
+    expect(await repo.getBlob('b1')).toBeUndefined();
+  });
+
   it('refuse de supprimer la dernière page', async () => {
     const { repo } = freshDB();
     const nb = await repo.createNotebook({ title: 'x', cover: 'nuit' });
@@ -63,10 +85,13 @@ describe('Repo — persistance locale', () => {
     const { repo } = freshDB();
     const nb = await repo.createNotebook({ title: 'x', cover: 'nuit' });
     const opened = (await openNotebook(nb.id, repo))!;
+    await opened.session.ensurePage(nb.pageIds[0]);
     const s = makeStroke(nb.pageIds[0], [[10, 10], [20, 20]]);
-    opened.session.apply([{ id: s.id, pageId: s.pageId, after: s }], 'Trait');
+    opened.session.apply([{ kind: 'stroke', id: s.id, pageId: s.pageId, after: s }], 'Trait');
     await opened.close(); // vide la file d'écriture
     const again = (await openNotebook(nb.id, repo))!;
+    expect(again.session.isLoaded(nb.pageIds[0])).toBe(false); // chargement paresseux
+    await again.session.ensurePage(nb.pageIds[0]);
     expect(again.session.getStrokes(nb.pageIds[0]).map((x) => x.id)).toEqual([s.id]);
     await again.close();
   });
