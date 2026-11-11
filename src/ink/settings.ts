@@ -43,6 +43,16 @@ export interface InkSettings {
   /** Affiche les points prédits par le navigateur pendant le tracé. */
   prediction: boolean;
   pageLayout: PageLayout;
+  /** Maintenir immobile en fin de tracé pour obtenir une forme nette. */
+  shapeHold: boolean;
+  /** Délai de maintien (ms). */
+  shapeHoldDelay: number;
+  /** Fenêtre de zoom : grossissement par rapport à la page ajustée à la largeur. */
+  zoomFactor: number;
+  /** Fenêtre de zoom : part de la hauteur de l'éditeur (0,2 à 0,6). */
+  zoomPanelHeight: number;
+  /** Fenêtre de zoom : avance automatique près du bord droit. */
+  zoomAutoAdvance: boolean;
   showPerf: boolean;
 }
 
@@ -63,6 +73,11 @@ export const DEFAULT_SETTINGS: InkSettings = {
   palmHeuristic: false,
   prediction: true,
   pageLayout: 'horizontal',
+  shapeHold: true,
+  shapeHoldDelay: 550,
+  zoomFactor: 2.5,
+  zoomPanelHeight: 0.36,
+  zoomAutoAdvance: true,
   showPerf: false,
 };
 
@@ -82,10 +97,12 @@ export interface ToolStyles {
 export const DEFAULT_TOOL_STYLES: ToolStyles = {
   penType: 'pen',
   pens: {
-    pen: { color: '#1d2433', width: 2.2, smoothing: 0.4 },
-    fountain: { color: '#1f3a6e', width: 3.2, smoothing: 0.45 },
-    brush: { color: '#1d2433', width: 8, smoothing: 0.5 },
-    pencil: { color: '#3b3f47', width: 2, smoothing: 0.35 },
+    pen: { color: '#1d2433', width: 2.2, smoothing: 0.35 },
+    fineliner: { color: '#1d2433', width: 1.6, smoothing: 0.35 },
+    fountain: { color: '#1f3a6e', width: 3.2, smoothing: 0.4 },
+    brush: { color: '#1d2433', width: 8, smoothing: 0.45 },
+    pencil: { color: '#3b3f47', width: 2, smoothing: 0.3 },
+    marker: { color: '#2f5aa8', width: 7, smoothing: 0.4 },
   },
   highlighter: { color: '#f2c94c', width: 18, smoothing: 0.5 },
 };
@@ -102,6 +119,8 @@ export const DEFAULT_TEXT_STYLE: TextStyle = {
 
 export const TOOL_INFO: Record<InkTool, { label: string; min: number; max: number; presets: number[] }> = {
   pen: { label: 'Stylo à bille', min: 0.6, max: 8, presets: [1.2, 2.2, 3.4, 5] },
+  fineliner: { label: 'Feutre fin', min: 0.5, max: 6, presets: [0.8, 1.6, 2.4, 3.6] },
+  marker: { label: 'Marqueur', min: 3, max: 30, presets: [5, 7, 12, 18] },
   fountain: { label: 'Plume', min: 1, max: 12, presets: [2, 3.2, 5, 8] },
   brush: { label: 'Pinceau', min: 2, max: 32, presets: [4, 8, 14, 22] },
   pencil: { label: 'Crayon', min: 0.6, max: 8, presets: [1.2, 2, 3.2, 5] },
@@ -135,12 +154,15 @@ export interface Favorite {
  * Chaque outil a sa propre réponse à la pression ; le réglage global la module.
  */
 export function strokeStyleFrom(tool: InkTool, s: InkSettings, smoothing: number, realPressure: boolean): StrokeStyle {
-  const base: Record<InkTool, number> = { pen: 0.28, fountain: 0.9, brush: 0.8, pencil: 0.4, highlighter: 0 };
-  const thinning = tool === 'fountain' || tool === 'highlighter' ? base[tool] : base[tool] * (0.4 + s.pressure);
+  const base: Record<InkTool, number> = { pen: 0.28, fineliner: 0, fountain: 0.9, brush: 0.8, pencil: 0.4, marker: 0, highlighter: 0 };
+  const fixed = tool === 'fountain' || tool === 'highlighter' || tool === 'fineliner' || tool === 'marker';
+  const thinning = fixed ? base[tool] : base[tool] * (0.4 + s.pressure);
   return {
     thinning: Math.round(Math.min(0.95, thinning) * 100) / 100,
-    streamline: Math.round(smoothing * 0.75 * 100) / 100,
-    tilt: tool === 'highlighter' ? 0 : Math.round(s.tilt * 100) / 100,
+    // Le lissage est appliqué une fois, à la saisie (filtre One Euro) : aucun lissage au rendu.
+    streamline: 0,
+    smoothing: Math.round(smoothing * 100) / 100,
+    tilt: tool === 'highlighter' || tool === 'fineliner' || tool === 'marker' ? 0 : Math.round(s.tilt * 100) / 100,
     realPressure,
     ...(tool === 'fountain' ? { nibAngle: Math.PI / 4 } : {}),
   };

@@ -1,5 +1,5 @@
 import { getStroke } from 'perfect-freehand';
-import { POINT_STRIDE, type InkTool, type PointBuffer, type Stroke, type StrokeStyle } from '../model/types';
+import { POINT_STRIDE, type InkTool, type Stroke, type StrokeStyle } from '../model/types';
 
 /**
  * Rendu des traits manuscrits. Chaque outil a un rendu réellement distinct :
@@ -7,17 +7,21 @@ import { POINT_STRIDE, type InkTool, type PointBuffer, type Stroke, type StrokeS
  *  - fountain (plume)    : épaisseur selon la direction du tracé (bec biseauté à 45°) et la pression ;
  *  - brush (pinceau)     : forte réponse à la pression/vitesse, extrémités effilées ;
  *  - pencil (crayon)     : texture granuleuse de graphite, légèrement transparent ;
+ *  - fineliner (feutre)  : largeur parfaitement constante, net ;
+ *  - marker (marqueur)   : large, extrémités plates, légèrement translucide ;
  *  - highlighter         : large, plat, translucide, dessiné sous l'encre.
  */
 
 export const HIGHLIGHTER_ALPHA = 0.32;
 export const PENCIL_ALPHA = 0.88;
+export const MARKER_ALPHA = 0.86;
 
 export interface OutlineInput {
   tool: InkTool;
   width: number;
   style: StrokeStyle;
-  points: PointBuffer;
+  /** Points (5 valeurs par point) : Float32Array enregistré ou tableau du tracé en cours. */
+  points: ArrayLike<number>;
 }
 
 function clamp01(v: number): number {
@@ -34,7 +38,7 @@ export function sizeFactor(tool: InkTool): number {
  * Les pleins (perpendiculaires au bec) sont épais, les déliés fins. La direction est
  * lissée pour éviter les à-coups.
  */
-function fountainPressures(p: PointBuffer, style: StrokeStyle): number[] {
+function fountainPressures(p: ArrayLike<number>, style: StrokeStyle): number[] {
   const n = p.length / POINT_STRIDE;
   const nib = style.nibAngle ?? Math.PI / 4;
   const out: number[] = new Array(n);
@@ -61,7 +65,7 @@ function fountainPressures(p: PointBuffer, style: StrokeStyle): number[] {
  */
 export function strokeOutline(s: OutlineInput, complete: boolean): number[][] {
   const p = s.points;
-  const n = p.length / POINT_STRIDE;
+  const n = Math.floor(p.length / POINT_STRIDE);
   const pts: number[][] = new Array(n);
   const fp = s.tool === 'fountain' ? fountainPressures(p, s.style) : null;
   for (let i = 0; i < n; i++) {
@@ -74,6 +78,10 @@ export function strokeOutline(s: OutlineInput, complete: boolean): number[][] {
   switch (s.tool) {
     case 'highlighter':
       return getStroke(pts, { ...base, thinning: 0, simulatePressure: false, start: { cap: true, taper: 0 }, end: { cap: true, taper: 0 } });
+    case 'fineliner':
+      return getStroke(pts, { ...base, thinning: 0, simulatePressure: false, start: { cap: true, taper: 0 }, end: { cap: true, taper: 0 } });
+    case 'marker':
+      return getStroke(pts, { ...base, thinning: 0, simulatePressure: false, start: { cap: false, taper: 0 }, end: { cap: false, taper: 0 } });
     case 'fountain':
       return getStroke(pts, { ...base, thinning: s.style.thinning, simulatePressure: false, start: { cap: true }, end: { cap: true } });
     case 'brush':
@@ -93,14 +101,18 @@ export function strokeOutline(s: OutlineInput, complete: boolean): number[][] {
         start: { cap: true, taper: Math.min(12, size * 2) },
         end: { cap: true, taper: complete ? Math.min(12, size * 2) : 0 },
       });
-    default:
+    default: {
+      // Traits antérieurs au 12/11/2026 (sans `smoothing`) : rendu inchangé.
+      const legacy = s.style.smoothing === undefined;
       return getStroke(pts, {
         ...base,
-        thinning: s.style.thinning,
-        simulatePressure: !s.style.realPressure,
+        // Sans pression matérielle (doigt, souris), épaisseur stable plutôt que dépendante de la vitesse.
+        thinning: legacy || s.style.realPressure ? s.style.thinning : 0,
+        simulatePressure: legacy ? !s.style.realPressure : false,
         start: { cap: true, taper: 0 },
         end: { cap: true, taper: 0 },
       });
+    }
   }
 }
 
@@ -203,6 +215,11 @@ function pencilPattern(ctx: CanvasRenderingContext2D, color: string): CanvasPatt
 export function fillOutline(ctx: CanvasRenderingContext2D, tool: InkTool, color: string, path: Path2D): void {
   if (tool === 'highlighter') {
     ctx.globalAlpha = HIGHLIGHTER_ALPHA;
+    ctx.fillStyle = color;
+    ctx.fill(path);
+    ctx.globalAlpha = 1;
+  } else if (tool === 'marker') {
+    ctx.globalAlpha = MARKER_ALPHA;
     ctx.fillStyle = color;
     ctx.fill(path);
     ctx.globalAlpha = 1;

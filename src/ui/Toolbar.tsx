@@ -17,6 +17,10 @@ export function Toolbar({
   setPrefs,
   canUndo,
   canRedo,
+  undoLabel,
+  redoLabel,
+  zoomOpen,
+  onToggleZoom,
   onUndo,
   onRedo,
   onInsertImage,
@@ -30,6 +34,10 @@ export function Toolbar({
   setPrefs: (p: Partial<Prefs> | ((p: Prefs) => Partial<Prefs>)) => void;
   canUndo: boolean;
   canRedo: boolean;
+  undoLabel?: string;
+  redoLabel?: string;
+  zoomOpen?: boolean;
+  onToggleZoom?: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onInsertImage: () => void;
@@ -93,10 +101,10 @@ export function Toolbar({
   return (
     <div className={`toolbar toolbar-${prefs.toolbar}`} role="toolbar" aria-label="Outils d'écriture">
       <div className="tool-group">
-        <button className="icon-btn" onClick={onUndo} disabled={!canUndo} aria-label="Annuler" title="Annuler (⌘Z)">
+        <button className="icon-btn" onClick={onUndo} disabled={!canUndo} aria-label="Annuler" title={undoLabel ? `Annuler : ${undoLabel} (⌘Z)` : 'Annuler (⌘Z)'}>
           <Icon name="undo" />
         </button>
-        <button className="icon-btn" onClick={onRedo} disabled={!canRedo} aria-label="Rétablir" title="Rétablir (⇧⌘Z)">
+        <button className="icon-btn" onClick={onRedo} disabled={!canRedo} aria-label="Rétablir" title={redoLabel ? `Rétablir : ${redoLabel} (⇧⌘Z)` : 'Rétablir (⇧⌘Z)'}>
           <Icon name="redo" />
         </button>
       </div>
@@ -110,6 +118,17 @@ export function Toolbar({
         <button className="tool-btn" onClick={onInsertImage} disabled={readOnly} aria-label="Insérer une image" title="Insérer une image">
           <Icon name="image" />
         </button>
+        {onToggleZoom && (
+          <button
+            className={`tool-btn${zoomOpen ? ' is-on' : ''}`}
+            onClick={onToggleZoom}
+            aria-pressed={!!zoomOpen}
+            aria-label="Fenêtre de zoom"
+            title={zoomOpen ? 'Fermer la fenêtre de zoom (Z)' : 'Fenêtre de zoom : écrire en grand, le texte s’inscrit à la bonne taille sur la page (Z)'}
+          >
+            <Icon name="zoomWindow" />
+          </button>
+        )}
       </div>
       {prefs.favorites.length > 0 && (
         <>

@@ -1940,3 +1940,241 @@ input[type='range'] {
     max-width: 140px;
   }
 }
+
+/* Fenêtre de zoom d'écriture */
+.canvas-wrap.has-zoom > .ink-host:not(.zoom-host) {
+  bottom: var(--zoom-h, 36%);
+}
+.zoom-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--zoom-h, 36%);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -6px 18px rgba(20, 24, 32, 0.08);
+  z-index: 6;
+}
+.zoom-grip {
+  height: 14px;
+  display: grid;
+  place-items: center;
+  cursor: ns-resize;
+  touch-action: none;
+  flex: none;
+}
+.zoom-grip span {
+  width: 44px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--surface-3);
+}
+.zoom-grip:focus-visible span {
+  background: var(--accent);
+}
+.zoom-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 10px 6px;
+  flex: none;
+  flex-wrap: wrap;
+}
+.zoom-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.zoom-factor {
+  min-width: 44px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9rem;
+}
+.zoom-newline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ink-host.zoom-host {
+  position: relative;
+  inset: auto;
+  flex: 1;
+  min-height: 0;
+  margin: 0 8px 8px;
+  border-radius: 10px;
+  overflow: hidden;
+  outline: 2px solid color-mix(in srgb, #2f6edc 45%, transparent);
+  outline-offset: -2px;
+}
+.chip {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 0.85rem;
+  min-height: 34px;
+  cursor: pointer;
+}
+.chip.is-on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* Forme nette en cours de reconnaissance */
+.shape-hint {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 0.88rem;
+  pointer-events: none;
+  animation: pop 0.12s ease-out;
+}
+
+/* Notification avec action */
+.toast.has-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: auto;
+}
+.toast-action {
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font: inherit;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--bg) 18%, transparent);
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  min-height: 34px;
+}
+
+/* Conversion manuscrit → texte */
+.convert {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.convert-ink {
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #ffffff;
+  max-height: 200px;
+  overflow: auto;
+  text-align: center;
+}
+.convert-ink img {
+  max-width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+}
+.convert-service {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.convert-providers {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.radio-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.radio-card.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.radio-card > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.convert-key .row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.convert-key input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+.convert-label {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.convert textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.05rem;
+  resize: vertical;
+}
+.convert-error {
+  color: var(--danger);
+  margin: 0;
+}
+.convert-alts,
+.convert-size {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.range-row {
+  display: grid;
+  grid-template-columns: minmax(110px, auto) 1fr 64px;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0;
+  font-size: 0.92rem;
+}
+.range-row input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.range-row output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
