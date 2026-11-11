@@ -24,7 +24,7 @@ describe('Sauvegarde et restauration', () => {
 
     const dst = freshDB();
     const report = await restoreBackup(file, dst.db);
-    expect(report).toMatchObject({ notebooks: 1, pages: 2, strokes: 1, copies: 0 });
+    expect(report).toMatchObject({ notebooks: 1, pages: 2, strokes: 1, items: 0, copies: 0 });
     const c = (await dst.repo.loadNotebookContent(nb.id))!;
     expect(c.notebook.title).toBe('Réunion');
     expect(c.notebook.pageIds).toHaveLength(2);
@@ -49,6 +49,41 @@ describe('Sauvegarde et restauration', () => {
     const cc = (await repo.loadNotebookContent(copy.id))!;
     expect(cc.strokes).toHaveLength(1);
     expect(cc.pages[0].notebookId).toBe(copy.id);
+  });
+
+  it('relit un fichier de sauvegarde version 1 (avant les objets et dossiers)', async () => {
+    const v1 = {
+      format: 'calame-backup', version: 1, schema: 1, app: 'Calame', exportedAt: '2026-11-11T08:00:00.000Z',
+      notebooks: [{ id: 'old', title: 'Ancien', cover: 'nuit', paper: { kind: 'lined', color: 'white', spacing: 32 }, pageIds: ['pg'], favorite: false, createdAt: 1, updatedAt: 2, openedAt: 2, trashedAt: null, v: 1 }],
+      pages: [{ id: 'pg', notebookId: 'old', width: 794, height: 1123, paper: { kind: 'lined', color: 'white', spacing: 32 }, createdAt: 1, updatedAt: 1, v: 1 }],
+      strokes: [],
+    };
+    const { repo, db } = freshDB();
+    const r = await restoreBackup(parseBackup(JSON.stringify(v1)), db);
+    expect(r.notebooks).toBe(1);
+    expect(await repo.getNotebook('old')).toMatchObject({ format: 'A4', folderId: null, kind: 'notebook', v: 2 });
+  });
+
+  it('exporte et restaure images, textes et dossiers', async () => {
+    const src = freshDB();
+    const f = await src.repo.createFolder('Java');
+    const nb = await src.repo.createNotebook({ title: 'Images', cover: 'nuit', folderId: f.id });
+    await src.repo.putBlob({ id: 'blob1', mime: 'image/png', data: new Uint8Array([9, 8, 7]).buffer, createdAt: 0 });
+    await src.repo.saveChanges(nb.id, {
+      strokesPut: [], strokesDel: [], itemsDel: [],
+      itemsPut: [
+        { kind: 'image', id: 'i1', pageId: nb.pageIds[0], x: 1, y: 2, w: 30, h: 40, blobId: 'blob1', mime: 'image/png', order: 1, createdAt: 0, v: 2 },
+        { kind: 'text', id: 't1', pageId: nb.pageIds[0], x: 5, y: 5, w: 100, h: 20, text: 'class A {}', font: 'mono', size: 14, color: '#000000', bold: true, italic: false, underline: false, align: 'left', order: 2, createdAt: 0, v: 2 },
+      ],
+    });
+    const file = parseBackup(JSON.stringify(await exportBackup(undefined, src.db)));
+    const dst = freshDB();
+    const r = await restoreBackup(file, dst.db);
+    expect(r.items).toBe(2);
+    const c = (await dst.repo.loadNotebookContent(nb.id))!;
+    expect(c.notebook.folderId).toBe(f.id);
+    expect(c.items.find((i) => i.kind === 'text')).toMatchObject({ text: 'class A {}', font: 'mono', bold: true });
+    expect(Array.from(new Uint8Array((await dst.repo.getBlob('blob1'))!.data))).toEqual([9, 8, 7]);
   });
 
   it('rejette un fichier invalide ou d’une version future avec un message clair', () => {

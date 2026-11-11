@@ -56,17 +56,21 @@ export interface OpenedNotebook {
 }
 
 export async function openNotebook(id: string, r: Repo = defaultRepo): Promise<OpenedNotebook | null> {
-  const content = await r.loadNotebookContent(id);
-  if (!content) return null;
-  const session = new NotebookSession(content.notebook, content.pages, content.strokes, {
-    saveStrokes(notebookId, put, del) {
-      const pageIds = Array.from(new Set([...put.map((s) => s.pageId)]));
-      saveQueue.enqueue(async () => {
-        await r.saveStrokes(notebookId, put, del);
-        broadcast({ type: 'strokes', notebookId, pageIds: pageIds.length ? pageIds : Array.from(session.pages.keys()) });
-      });
+  const meta = await r.loadNotebookMeta(id);
+  if (!meta) return null;
+  const session = new NotebookSession(
+    meta.notebook,
+    meta.pages,
+    {
+      save(notebookId, d) {
+        saveQueue.enqueue(async () => {
+          await r.saveChanges(notebookId, d);
+          broadcast({ type: 'strokes', notebookId, pageIds: d.pageIds });
+        });
+      },
     },
-  });
+    (pageId) => r.loadPageContent(pageId),
+  );
 
   // Marque le carnet comme récemment ouvert (sans bloquer l'ouverture).
   saveQueue.enqueue(async () => {
@@ -89,6 +93,17 @@ export async function openNotebook(id: string, r: Repo = defaultRepo): Promise<O
     if (opened) opened.lock = s;
     session.readOnly = s === 'readonly';
     for (const l of lockListeners) l(s);
+  };
+
+  /** Relit l'ordre et la liste des pages (modifiés par un autre onglet). */
+  const refreshStructure = async () => {
+    const fresh = await r.loadNotebookMeta(id);
+    if (!fresh) return;
+    const ids = new Set(fresh.pages.map((p) => p.id));
+    for (const pid of Array.from(session.pages.keys())) if (!ids.has(pid)) session.removePage(pid);
+    for (const p of fresh.pages) if (!session.pages.has(p.id)) session.pages.set(p.id, p);
+    session.setNotebook(fresh.notebook);
+    for (const l of structureListeners) l();
   };
 
   const locks = (navigator as Navigator & { locks?: LockManager }).locks;
@@ -125,10 +140,10 @@ export async function openNotebook(id: string, r: Repo = defaultRepo): Promise<O
     if (closed) return;
     if (m.type === 'strokes' && m.notebookId === id) {
       for (const pid of m.pageIds) {
-        if (session.pages.has(pid)) session.reloadPage(pid, await r.loadPageStrokes(pid));
+        if (session.isLoaded(pid)) session.reloadPage(pid, await r.loadPageContent(pid));
       }
     } else if (m.type === 'structure' && m.notebookId === id) {
-      for (const l of structureListeners) l();
+      await refreshStructure();
     }
   });
 
@@ -140,16 +155,9 @@ export async function openNotebook(id: string, r: Repo = defaultRepo): Promise<O
       const ok = await acquire(true);
       if (ok) {
         // Recharge l'état le plus récent avant d'écrire.
-        const fresh = await r.loadNotebookContent(id);
-        if (fresh) {
-          session.setNotebook(fresh.notebook);
-          for (const p of fresh.pages) {
-            if (!session.pages.has(p.id)) session.addPage(p);
-            session.reloadPage(
-              p.id,
-              fresh.strokes.filter((s) => s.pageId === p.id),
-            );
-          }
+        await refreshStructure();
+        for (const pid of Array.from(session.pages.keys())) {
+          if (session.isLoaded(pid)) session.reloadPage(pid, await r.loadPageContent(pid));
         }
         setLock('owner');
         for (const l of structureListeners) l();

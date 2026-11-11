@@ -2,8 +2,10 @@ import {
   DEFAULT_PAPER,
   POINT_STRIDE,
   SCHEMA_VERSION,
+  type Folder,
   type Notebook,
   type Page,
+  type PageItem,
   type Stroke,
 } from '../model/types';
 import { computeBBox, strokeMaxRadius } from '../ink/geometry';
@@ -16,11 +18,13 @@ import { computeBBox, strokeMaxRadius } from '../ink/geometry';
  * les étapes `v → v+1` jusqu'à SCHEMA_VERSION. Une donnée plus récente que
  * l'application est refusée (on ne la tronque jamais).
  *
- * v0 : format provisoire (points en tableau de nombres, 4 valeurs par point
- *      x, y, pression, t ; pas de style) — accepté à l'import.
- * v1 : format actuel (voir model/types.ts).
+ * v0 : format provisoire (points en tableau, 4 valeurs par point, sans style) — accepté à l'import.
+ * v1 : carnets, pages, traits (stylo et surligneur).
+ * v2 : + dossiers, format/orientation/type de carnet, motif de couverture, objets de page.
+ *      Les traits et pages v1 sont valides tels quels.
  */
 type Raw = Record<string, unknown> & { v?: number };
+type Step = (r: Raw) => Raw;
 
 export class NewerSchemaError extends Error {
   constructor(v: number) {
@@ -37,7 +41,7 @@ function checkVersion(raw: Raw): number {
   return v;
 }
 
-const strokeSteps: ((r: Raw) => Raw)[] = [
+const strokeSteps: Step[] = [
   // 0 → 1
   (r) => {
     let pts = r.points as ArrayLike<number>;
@@ -50,12 +54,7 @@ const strokeSteps: ((r: Raw) => Raw)[] = [
     } else {
       pts = arr;
     }
-    const style = (r.style as Stroke['style']) ?? {
-      thinning: 0.6,
-      streamline: 0.35,
-      tilt: 0,
-      realPressure: true,
-    };
+    const style = (r.style as Stroke['style']) ?? { thinning: 0.6, streamline: 0.35, tilt: 0, realPressure: true };
     const { stride: _ignored, ...rest } = r;
     void _ignored;
     return {
@@ -63,15 +62,17 @@ const strokeSteps: ((r: Raw) => Raw)[] = [
       tool: r.tool === 'highlighter' ? 'highlighter' : 'pen',
       style,
       points: Float32Array.from(pts),
-      order: typeof r.order === 'number' ? r.order : (r.createdAt as number) ?? 0,
+      order: typeof r.order === 'number' ? r.order : ((r.createdAt as number) ?? 0),
       v: 1,
     };
   },
+  // 1 → 2 : aucun changement de structure.
+  (r) => ({ ...r, v: 2 }),
 ];
 
-const pageSteps: ((r: Raw) => Raw)[] = [(r) => ({ ...r, paper: r.paper ?? DEFAULT_PAPER, v: 1 })];
+const pageSteps: Step[] = [(r) => ({ ...r, paper: r.paper ?? DEFAULT_PAPER, v: 1 }), (r) => ({ ...r, v: 2 })];
 
-const notebookSteps: ((r: Raw) => Raw)[] = [
+const notebookSteps: Step[] = [
   (r) => ({
     ...r,
     favorite: Boolean(r.favorite),
@@ -81,9 +82,18 @@ const notebookSteps: ((r: Raw) => Raw)[] = [
     paper: r.paper ?? DEFAULT_PAPER,
     v: 1,
   }),
+  (r) => ({
+    ...r,
+    folderId: (r.folderId as string | null) ?? null,
+    kind: r.kind ?? 'notebook',
+    coverPattern: r.coverPattern ?? 'plain',
+    format: r.format ?? 'A4',
+    orientation: r.orientation ?? 'portrait',
+    v: 2,
+  }),
 ];
 
-function run(raw: Raw, steps: ((r: Raw) => Raw)[]): Raw {
+function run(raw: Raw, steps: Step[]): Raw {
   let r = raw;
   for (let v = checkVersion(raw); v < SCHEMA_VERSION; v++) r = steps[v](r);
   return r;
@@ -102,4 +112,15 @@ export function migratePage(raw: Raw): Page {
 
 export function migrateNotebook(raw: Raw): Notebook {
   return run(raw, notebookSteps) as unknown as Notebook;
+}
+
+/** Objets et dossiers n'existent qu'à partir du schéma 2. */
+export function migrateItem(raw: Raw): PageItem {
+  checkVersion(raw);
+  return { ...raw, v: SCHEMA_VERSION } as unknown as PageItem;
+}
+
+export function migrateFolder(raw: Raw): Folder {
+  checkVersion(raw);
+  return { color: '#8a8f98', ...raw, v: SCHEMA_VERSION } as unknown as Folder;
 }
