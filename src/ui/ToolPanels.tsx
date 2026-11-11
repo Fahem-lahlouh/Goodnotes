@@ -19,6 +19,8 @@ import { Icon, type IconName } from './icons';
 
 export const PEN_ICONS: Record<InkTool, IconName> = {
   pen: 'pen',
+  fineliner: 'fineliner',
+  marker: 'marker',
   fountain: 'fountain',
   brush: 'brush',
   pencil: 'pencil',
@@ -139,7 +141,7 @@ export function InkPanel({
           {PEN_TYPES.map((p) => (
             <button key={p} role="radio" aria-checked={penType === p} className={penType === p ? 'is-on' : ''} onClick={() => onPenType(p)}>
               <Icon name={PEN_ICONS[p]} size={20} />
-              <span>{TOOL_INFO[p].label.replace('Stylo à bille', 'Bille')}</span>
+              <span>{TOOL_INFO[p].label.replace('Stylo à bille', 'Bille').replace('Feutre fin', 'Feutre')}</span>
             </button>
           ))}
         </div>

@@ -4,6 +4,7 @@ export interface Sample {
   /** Coordonnées écran relatives à la zone de dessin (px CSS). */
   x: number;
   y: number;
+  /** 0..1 ; NaN = inconnue (stylet). */
   pressure: number;
   /** 0 = perpendiculaire, 1 = couché. */
   tilt: number;
@@ -25,8 +26,10 @@ export function sampleFrom(e: PointerEvent, ox: number, oy: number): Sample {
   } else if (e.tiltX || e.tiltY) {
     tilt = Math.min(1, Math.hypot(e.tiltX, e.tiltY) / 90);
   }
+  // Stylet : une pression nulle signifie « inconnue » (souvent le tout premier événement de
+  // l'Apple Pencil) → NaN, corrigé par le moteur dès la première vraie valeur (sinon « goutte » au départ).
   let pressure: number;
-  if (e.pointerType === 'pen') pressure = e.pressure > 0 ? e.pressure : 0.5;
+  if (e.pointerType === 'pen') pressure = e.pressure > 0 ? e.pressure : NaN;
   else pressure = 0.5;
   return { x: e.clientX - ox, y: e.clientY - oy, pressure, tilt, time: e.timeStamp };
 }

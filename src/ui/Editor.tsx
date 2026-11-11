@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { InkEngine, type PerfStats, type SelectionInfo, type TextEditRequest, type ViewInfo } from '../ink/engine';
+import { InkEngine, type PerfStats, type SelectionInfo, type TextEditRequest, type ViewInfo, type ZoomState } from '../ink/engine';
 import { prepareImage, primeImage, setBlobLoader, onImageReady } from '../ink/items';
 import { PALETTE } from '../ink/settings';
 import { newId } from '../model/ids';
@@ -17,6 +17,8 @@ import { SettingsPanel } from './SettingsPanel';
 import { TextEditor } from './TextEditor';
 import { Toolbar } from './Toolbar';
 import { toast } from './Toast';
+import { ZoomPanel } from './ZoomPanel';
+import { ConvertDialog } from './ConvertDialog';
 import { getPrefs, loadView, saveView, setPrefs as setPrefsGlobal, usePrefs } from './prefs';
 
 declare global {
@@ -38,7 +40,14 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
   const [prefs, setPrefs] = usePrefs();
   const [view, setView] = useState<ViewInfo>({ scale: 1, pageIndex: 0, pageCount: 1, fitScale: 1, layout: 'horizontal' });
   const [sel, setSel] = useState<SelectionInfo | null>(null);
-  const [hist, setHist] = useState({ canUndo: false, canRedo: false });
+  const [hist, setHist] = useState({ canUndo: false, canRedo: false, undoLabel: '', redoLabel: '' });
+  const [zoomOpen, setZoomOpen] = useState(false);
+  const [zoom, setZoom] = useState<ZoomState | null>(null);
+  const [shapeHint, setShapeHint] = useState<string | null>(null);
+  const [convert, setConvert] = useState(false);
+  const zoomHostRef = useRef<HTMLDivElement>(null);
+  /** Dernier grossissement connu des préférences : distingue un réglage (curseur) d'un écho du moteur. */
+  const zoomSynced = useRef<number | null>(null);
   const [save, setSave] = useState<SaveState>(saveQueue.state);
   const [showPages, setShowPages] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -81,7 +90,17 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
   useEffect(() => {
     if (!opened) return;
     const s = opened.session;
-    const syncHist = () => setHist({ canUndo: s.canUndo, canRedo: s.canRedo });
+    // Le bouton reste actif pendant un geste en cours (gomme…) : l'annulation termine d'abord
+    // proprement un geste dont la fin aurait été perdue, au lieu de rester grisée.
+    const syncHist = () => {
+      const h = s.historySize;
+      setHist({
+        canUndo: !s.readOnly && (h.undo > 0 || s.inBatch),
+        canRedo: !s.readOnly && h.redo > 0,
+        undoLabel: s.peekUndo()?.label ?? '',
+        redoLabel: s.peekRedo()?.label ?? '',
+      });
+    };
     syncHist();
     const offs = [
       opened.onLockChange((l) => {
@@ -126,6 +145,19 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
         onTextEdit: (req) => setTextEdit(req),
         onToolRequest: (tool) => setPrefsGlobal({ tool }),
         onNotice: (m) => toast(m),
+        onShapeHint: setShapeHint,
+        onShapeCommitted: (c) => {
+          setShapeHint(null);
+          toast(`${c.label} : forme nette`, 'info', {
+            action: {
+              label: 'Garder le tracé libre',
+              run: () => {
+                if (!engineRef.current?.revertShape(c)) toast('Ce tracé a déjà été modifié.');
+              },
+            },
+          });
+        },
+        onZoom: setZoom,
       },
       { layout: p.settings.pageLayout, pageIndex: saved?.page ?? 0 },
     );
@@ -160,7 +192,12 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
   useEffect(() => {
     const e = engineRef.current;
     if (!e) return;
-    e.setSettings(prefs.settings);
+    // Le grossissement de la fenêtre de zoom est piloté par le moteur (pincement, boutons) :
+    // on garde sa valeur courante pour ne pas revenir en arrière pendant un geste.
+    const ext = prefs.settings.zoomFactor;
+    const fromPrefs = zoomSynced.current === null || Math.abs(ext - zoomSynced.current) > 1e-3;
+    zoomSynced.current = ext;
+    e.setSettings({ ...prefs.settings, zoomFactor: fromPrefs ? ext : e.settings.zoomFactor });
     e.setStyles(prefs.styles);
     e.setTool(prefs.tool);
     e.setTextStyle(prefs.textStyle);
@@ -186,6 +223,34 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
   useEffect(() => {
     engineRef.current?.setEditing(textEdit?.mode === 'edit' ? textEdit.item.id : null);
   }, [textEdit]);
+
+  // ---------- Fenêtre de zoom ----------
+  useEffect(() => {
+    const eng = engine;
+    const host = zoomHostRef.current;
+    if (!eng || !zoomOpen || !host) return;
+    eng.openZoom(host);
+    return () => eng.closeZoom();
+  }, [engine, zoomOpen]);
+
+  // Grossissement mémorisé (après stabilisation, pour ne pas écrire les préférences à chaque frame).
+  useEffect(() => {
+    if (!zoom?.open) return;
+    const f = zoom.factor;
+    const t = window.setTimeout(() => {
+      if (Math.abs(getPrefs().settings.zoomFactor - f) > 1e-3) {
+        zoomSynced.current = f;
+        setPrefsGlobal((p) => ({ settings: { ...p.settings, zoomFactor: f } }));
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [zoom?.open, zoom?.factor]);
+
+  useEffect(() => {
+    if (!shapeHint) return;
+    const t = window.setTimeout(() => setShapeHint(null), 4000);
+    return () => clearTimeout(t);
+  }, [shapeHint]);
 
   // ---------- Actions ----------
   const undo = useCallback(() => {
@@ -334,6 +399,7 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
         eng.deleteSelection();
       } else if (k === 'escape') {
         if (eng.hasSelection()) eng.clearSelection();
+        else if (zoomOpen) setZoomOpen(false);
         else if (focus) setFocus(false);
       } else if (k === 'arrowright' || k === 'pagedown') {
         e.preventDefault();
@@ -347,10 +413,15 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
       else if (k === 'l' || k === 's') setPrefs({ tool: 'select' });
       else if (k === 't') setPrefs({ tool: 'text' });
       else if (k === 'f') setFocus((f) => !f);
+      else if (k === 'z') setZoomOpen((z) => !z);
+      else if (k === 'enter' && zoomOpen) {
+        e.preventDefault();
+        eng.zoomNewline();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, setPrefs, focus]);
+  }, [undo, redo, setPrefs, focus, zoomOpen]);
 
   // ---------- Rendu ----------
   if (error) {
@@ -438,6 +509,10 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
           setPrefs={setPrefs}
           canUndo={hist.canUndo}
           canRedo={hist.canRedo}
+          undoLabel={hist.undoLabel}
+          redoLabel={hist.redoLabel}
+          zoomOpen={zoomOpen}
+          onToggleZoom={() => setZoomOpen((z) => !z)}
           onUndo={undo}
           onRedo={redo}
           onInsertImage={() => fileRef.current?.click()}
@@ -451,8 +526,25 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
           readOnly={readOnly}
         />
         <div className="workspace">
-          <div className="canvas-wrap">
+          <div className={`canvas-wrap${zoomOpen ? ' has-zoom' : ''}`} style={zoomOpen ? { ['--zoom-h' as string]: `${Math.round(prefs.settings.zoomPanelHeight * 100)}%` } : undefined}>
             <div className="ink-host" ref={hostRef} data-testid="ink-host" />
+            {zoomOpen && engine && (
+              <ZoomPanel
+                engine={engine}
+                state={zoom}
+                hostRef={zoomHostRef}
+                height={prefs.settings.zoomPanelHeight}
+                autoAdvance={prefs.settings.zoomAutoAdvance}
+                onHeight={(h) => setPrefs((p) => ({ settings: { ...p.settings, zoomPanelHeight: h } }))}
+                onAutoAdvance={(v) => setPrefs((p) => ({ settings: { ...p.settings, zoomAutoAdvance: v } }))}
+                onClose={() => setZoomOpen(false)}
+              />
+            )}
+            {shapeHint && (
+              <div className="shape-hint" role="status">
+                <Icon name="shape" size={16} /> {shapeHint} — relevez pour valider
+              </div>
+            )}
             {!opened && <div className="loading overlay">Ouverture du carnet…</div>}
             {engine && textEdit && (
               <TextEditor
@@ -489,6 +581,11 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
                 {(sel.strokes > 0 || sel.texts > 0) && (
                   <button className="icon-btn sm" onClick={(e) => setColorAnchor(e.currentTarget)} aria-label="Couleur de la sélection" title="Couleur">
                     <Icon name="palette" size={18} />
+                  </button>
+                )}
+                {sel.strokes > 0 && !readOnly && (
+                  <button className="icon-btn sm" onClick={() => setConvert(true)} aria-label="Convertir en texte" title="Convertir l’écriture en texte">
+                    <Icon name="convert" size={18} />
                   </button>
                 )}
                 {sel.strokes > 0 && (
@@ -621,6 +718,7 @@ export function Editor({ notebookId, onClose }: { notebookId: string; onClose: (
         </Popover>
       )}
 
+      {convert && engine && opened && <ConvertDialog engine={engine} session={opened.session} prefs={prefs} onPrefs={setPrefs} onClose={() => setConvert(false)} />}
       {showSettings && <SettingsPanel prefs={prefs} onPrefs={(p) => setPrefs(p)} onClose={() => setShowSettings(false)} />}
       {deletePage && (
         <Confirm

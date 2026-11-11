@@ -48,7 +48,14 @@ re-rendu que pour des changements d'état d'interface (outil, page courante, sé
 
 ### D2 — Rendu de l'encre
 - `perfect-freehand` (MIT, ~200 lignes, sans dépendance, utilisé par tldraw/Excalidraw) calcule le contour
-  d'un trait à partir des points et de la pression. Le contour est mis en cache (`Path2D`) par trait.
+  d'un trait à partir des points et de la pression. Le contour est mis en cache (`Path2D`) par trait. Il est calculé dans
+  un repère 8 fois plus fin, pour neutraliser un seuil fixe de la bibliothèque (crochets de fin de mot).
+- **Saisie** (11/11/2026, 2ᵉ lot) : filtre One Euro sur la position (`src/ink/filter.ts`), fondé sur le temps réel entre
+  événements ; points filtrés enregistrés, `streamline` à 0. L'encre affichée inclut le dernier échantillon brut, et le
+  tracé en cours utilise exactement le calcul du trait enregistré.
+- **Surfaces** : la page principale et la fenêtre de zoom sont deux `Surface` (deux canvas + une vue chacune) servies par
+  le même moteur. Un trait écrit dans la fenêtre est créé une fois, en coordonnées page, et rendu sur les deux.
+- **Formes nettes** : `src/ink/shapes.ts` (reconnaissance géométrique locale, seuils relatifs à la taille du tracé).
 - Deux canvas : **base** (pages + traits enregistrés, redessinés vectoriellement à chaque changement de vue
   → netteté à tout zoom) et **live** (trait en cours, lasso, sélection, curseur), effacé à chaque frame.
 - Ajout d'un trait au stylo : dessin **incrémental** sur le canvas de base (pas de rendu complet).
@@ -88,8 +95,9 @@ autre requête n'est interceptée. Une nouvelle version **attend** que l'utilisa
 après vidage de la file d'écriture.
 
 ### D6 — Sécurité du frontend
-CSP stricte injectée au build (`script-src 'self'`, `connect-src 'self'`, `object-src 'none'`…),
-`referrer: no-referrer`, aucun script tiers, aucune requête réseau sortante. `scripts/check-secrets.mjs`
+CSP stricte injectée au build (`script-src 'self'`, `connect-src 'self' https://vision.googleapis.com`, `object-src 'none'`…),
+`referrer: no-referrer`, aucun script tiers. Seule requête sortante possible : la reconnaissance Google Cloud Vision,
+**désactivée par défaut**, avec la clé de l'utilisateur stockée localement (voir [RECONNAISSANCE.md](RECONNAISSANCE.md)). `scripts/check-secrets.mjs`
 bloque le build CI si un motif de secret apparaît dans le dépôt ou le bundle.
 
 ## Choix : aucune base de données, 100 % gratuit (décision du 11/11/2026)

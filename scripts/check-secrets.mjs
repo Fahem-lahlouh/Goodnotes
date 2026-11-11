@@ -9,6 +9,7 @@ const patterns = [
   [/github_pat_[A-Za-z0-9_]{40,}/, 'jeton GitHub (fine-grained)'],
   [/sk-(?:ant-|proj-)?[A-Za-z0-9_-]{32,}/, 'clé API (sk-…)'],
   [/AKIA[0-9A-Z]{16}/, 'clé AWS'],
+  [/AIza[0-9A-Za-z_-]{35}/, 'clé API Google'],
   [/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/, 'clé privée'],
   [/service_role/i, 'clé de service Supabase'],
   [/eyJhbGciOi[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/, 'JWT'],

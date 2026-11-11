@@ -18,9 +18,9 @@ export const SCHEMA_VERSION = 2;
  * Outil ayant produit un trait.
  * 'pen' = stylo à bille (valeur historique du schéma 1, conservée telle quelle).
  */
-export type InkTool = 'pen' | 'fountain' | 'brush' | 'pencil' | 'highlighter';
+export type InkTool = 'pen' | 'fineliner' | 'fountain' | 'brush' | 'pencil' | 'marker' | 'highlighter';
 export type PenType = Exclude<InkTool, 'highlighter'>;
-export const PEN_TYPES: PenType[] = ['pen', 'fountain', 'brush', 'pencil'];
+export const PEN_TYPES: PenType[] = ['pen', 'fineliner', 'fountain', 'brush', 'pencil', 'marker'];
 
 /** Nombre de valeurs par point dans `Stroke.points`. */
 export const POINT_STRIDE = 5;
@@ -37,8 +37,13 @@ export type PointBuffer = Float32Array;
 export interface StrokeStyle {
   /** Influence de la pression sur l'épaisseur (0 = aucune). */
   thinning: number;
-  /** Lissage de la trajectoire (0 = brut, 0.8 = très lissé). */
+  /**
+   * Ancien lissage appliqué au rendu (traits créés avant le 12/11/2026). Les nouveaux traits
+   * sont filtrés à la saisie (points déjà lissés) : streamline = 0.
+   */
   streamline: number;
+  /** Lissage 0..1 appliqué à la saisie (filtre One Euro), pour information. */
+  smoothing?: number;
   /** Élargissement lié à l'inclinaison (0 = ignoré). */
   tilt: number;
   /** Vrai si la pression provient du matériel (Apple Pencil) et non d'une simulation. */

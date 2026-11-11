@@ -51,7 +51,9 @@ function contentSecurityPolicy(): Plugin {
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
-    "connect-src 'self'",
+    // Seul service externe possible : la reconnaissance d'écriture Google Cloud Vision,
+    // utilisée uniquement si l'utilisateur l'active avec sa propre clé (désactivée par défaut).
+    "connect-src 'self' https://vision.googleapis.com",
     "worker-src 'self'",
     "manifest-src 'self'",
     "object-src 'none'",

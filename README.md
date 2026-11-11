@@ -65,7 +65,9 @@ Chaque fusion sur `main` construit, publie, puis **vérifie la version réelleme
 au commit déployé). Adresse : **https://fahem-lahlouh.github.io/Goodnotes/**.
 
 GitHub Pages publie **l'interface** (code public, gratuit pour un dépôt public). Il ne stocke aucune note : vos notes
-restent dans le navigateur de votre iPad et ne sont jamais envoyées. Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+restent dans le navigateur de votre iPad et ne sont jamais envoyées. Seule exception, **si vous l'activez vous-même**
+avec votre clé : l'image des traits que vous convertissez en texte part vers Google Cloud Vision ([docs/RECONNAISSANCE.md](docs/RECONNAISSANCE.md)).
+Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Documentation
 
@@ -74,6 +76,8 @@ restent dans le navigateur de votre iPad et ne sont jamais envoyées. Voir [docs
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Architecture, choix techniques, hébergement, sécurité |
 | [docs/FEATURES.md](docs/FEATURES.md) | Matrice des fonctionnalités et état réel |
 | [docs/CORRECTIONS.md](docs/CORRECTIONS.md) | Corrections du 11/11/2026 : cause, correction, test, limites |
+| [docs/ECRITURE.md](docs/ECRITURE.md) | Écriture (2ᵉ lot) : précision, stylos, annuler fiable, formes nettes, fenêtre de zoom, conversion en texte |
+| [docs/RECONNAISSANCE.md](docs/RECONNAISSANCE.md) | Conversion manuscrit → texte : services, données envoyées, coûts |
 | [docs/AUDIT.md](docs/AUDIT.md) | Audit de Goodnotes et tableau de suivi |
 | [docs/IPAD.md](docs/IPAD.md) | Installation sur iPad et procédure de validation manuelle |
 | [docs/BACKUP.md](docs/BACKUP.md) | Sauvegarde et restauration |

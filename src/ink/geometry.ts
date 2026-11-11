@@ -27,7 +27,7 @@ export function computeBBox(points: PointBuffer, pad: number): BBox {
 /** Demi-épaisseur maximale atteignable par un trait (sert au padding de bbox et au hit-test). */
 export function strokeMaxRadius(s: Pick<Stroke, 'width' | 'tool' | 'style'>): number {
   const factor = s.tool === 'fountain' ? 0.8 : 1;
-  const thinning = s.tool === 'highlighter' ? 0 : (s.style.thinning ?? 0.5);
+  const thinning = s.tool === 'highlighter' || s.tool === 'fineliner' || s.tool === 'marker' ? 0 : (s.style.thinning ?? 0.5);
   return s.width * factor * (0.5 + 0.5 * thinning) * (1 + (s.style.tilt ?? 0) * 0.6) + 1;
 }
 

@@ -15,6 +15,11 @@ Plein écran réel, quatre outils d'écriture distincts, favoris, gomme réglabl
 mode doigt explicite, sélections lasso/rectangle/carré, texte et images, refonte du design, formats et modèles, dossiers,
 copie de sécurité automatique avant mise à niveau. Détail : [CORRECTIONS.md](CORRECTIONS.md), inventaire : [AUDIT.md](AUDIT.md).
 
+## Écriture, 2ᵉ lot du 11/11/2026 : ✅ (validation iPad en attente)
+Précision du trait (filtre One Euro, encre jusqu'à la pointe, plus de saut au lever ni de goutte au départ), feutre fin et
+marqueur, annuler/rétablir fiabilisé (gestes dont la fin est perdue), forme nette par maintien, fenêtre de zoom d'écriture,
+conversion manuscrit → texte avec vérification. Détail : [ECRITURE.md](ECRITURE.md) ; services : [RECONNAISSANCE.md](RECONNAISSANCE.md).
+
 ## Étape 2 — Application quotidienne : 🔶 en cours
 Fait : bibliothèque (barre latérale, carnets, couvertures, formats, modèles, récents, favoris, tri, recherche titres,
 dossiers, corbeille), pages (ajout, duplication, suppression, réordonnancement, miniatures paresseuses), texte, images,
@@ -33,7 +38,7 @@ Reste (par priorité) :
   appareils par fichier `.calame`.
 
 ## Étape 4 — Fonctions avancées : ⬜
-Reconnaissance (évaluation locale vs externe opt-in), audio synchronisé (les horodatages par point existent déjà),
+Reconnaissance : conversion avec vérification faite (Scribble / navigateur / Google Vision optionnel) ; reste la recherche dans l'écriture. Audio synchronisé (les horodatages par point existent déjà),
 fiches et répétition espacée, liens entre notes, vue partagée, modèles réunion/Java, blocs de code.
 
 ## Étape 5 — Finition et déploiement : ⬜

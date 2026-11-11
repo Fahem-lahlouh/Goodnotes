@@ -120,6 +120,58 @@ export function SettingsPanel({ prefs, onPrefs, onClose }: { prefs: Prefs; onPre
       </section>
 
       <section className="panel-section">
+        <h3>Formes nettes</h3>
+        <Toggle
+          label="Maintenir en fin de tracé pour obtenir une forme nette"
+          checked={s.shapeHold}
+          onChange={(v) => set({ shapeHold: v })}
+          hint="Tracez une ligne, un cercle ou un rectangle puis gardez le stylet (ou le doigt) immobile sans le relever : le tracé devient une forme nette. Pour une droite, l'extrémité suit encore le stylet avant de relever. « Garder le tracé libre » ou Annuler revient au tracé d'origine."
+        />
+        <label className="range-row">
+          <span>Délai de maintien</span>
+          <input
+            type="range"
+            min={300}
+            max={1500}
+            step={50}
+            value={s.shapeHoldDelay}
+            disabled={!s.shapeHold}
+            onChange={(e) => set({ shapeHoldDelay: Number(e.target.value) })}
+            aria-label="Délai de maintien avant la forme nette, en millisecondes"
+          />
+          <output>{(s.shapeHoldDelay / 1000).toFixed(2).replace('.', ',')} s</output>
+        </label>
+      </section>
+
+      <section className="panel-section">
+        <h3>Fenêtre de zoom</h3>
+        <p className="small muted">
+          Bouton « Fenêtre de zoom » de la barre d'outils (touche Z). Écrivez en grand dans la fenêtre : le texte s'inscrit à la bonne taille dans le cadre bleu de
+          la page. Déplacez le cadre par son onglet, redimensionnez-le par sa poignée ; glissez au doigt dans la fenêtre pour le déplacer, pincez pour changer le
+          grossissement.
+        </p>
+        <Toggle
+          label="Avance automatique près du bord droit"
+          checked={s.zoomAutoAdvance}
+          onChange={(v) => set({ zoomAutoAdvance: v })}
+          hint="Quand un mot se termine dans la zone bleutée à droite de la fenêtre, le cadre se décale vers la droite."
+        />
+        <label className="range-row">
+          <span>Grossissement</span>
+          <input
+            type="range"
+            min={1.25}
+            max={6}
+            step={0.25}
+            value={s.zoomFactor}
+            onChange={(e) => set({ zoomFactor: Number(e.target.value) })}
+            aria-label="Grossissement de la fenêtre de zoom"
+          />
+          <output>×{s.zoomFactor.toFixed(2).replace('.', ',')}</output>
+        </label>
+      </section>
+
+      <section className="panel-section">
         <h3>Plein écran et mode application</h3>
         <ul className="small diag">
           <li>
