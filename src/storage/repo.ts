@@ -270,7 +270,13 @@ export class Repo {
       ...keys.map((k) => tx.objectStore('strokes').delete(k)),
       ...itemKeys.map((k) => tx.objectStore('items').delete(k)),
       tx.objectStore('pages').delete(pageId),
-      tx.objectStore('notebooks').put({ ...nb, pageIds: nb.pageIds.filter((p) => p !== pageId), updatedAt: Date.now() }),
+      tx.objectStore('notebooks').put({
+        ...nb,
+        pageIds: nb.pageIds.filter((p) => p !== pageId),
+        ...(nb.bookmarks ? { bookmarks: nb.bookmarks.filter((p) => p !== pageId) } : {}),
+        ...(nb.outline ? { outline: nb.outline.filter((o) => o.pageId !== pageId) } : {}),
+        updatedAt: Date.now(),
+      }),
       tx.done,
     ]);
   }

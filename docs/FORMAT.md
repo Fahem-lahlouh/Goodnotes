@@ -38,6 +38,10 @@ Base séparée `calame-safety` : copies de sécurité automatiques (JSON `.calam
 }
 ```
 
+Carnet (`Notebook`) : champs facultatifs ajoutés le 11/11/2026 (3ᵉ lot), sans migration :
+`bookmarks?: string[]` (pages en favori) et `outline?: { pageId: string; title: string }[]` (plan du carnet).
+Bloc de texte (`TextItem`) : `note?: string` — couleur d'une note repositionnable.
+
 Le temps par point permet de rejouer l'écriture et, plus tard, de la synchroniser avec un enregistrement audio.
 
 ## Objets de page (schéma 2)

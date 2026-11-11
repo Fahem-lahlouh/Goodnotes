@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { InkEngine, TextEditRequest } from '../ink/engine';
-import { FONTS, LINE_HEIGHT, TEXT_PAD } from '../ink/items';
+import { FONTS, LINE_HEIGHT, textPad } from '../ink/items';
 import type { TextStyle } from '../model/types';
 
 /**
@@ -23,6 +23,7 @@ export function TextEditor({
   const [text, setText] = useState(req.mode === 'edit' ? req.item.text : '');
   const done = useRef(false);
   const geom = req.mode === 'edit' ? { pageId: req.item.pageId, x: req.item.x, y: req.item.y, w: req.item.w } : req;
+  const note = req.mode === 'edit' ? req.item.note : req.note;
 
   const finish = () => {
     if (done.current) return;
@@ -44,15 +45,16 @@ export function TextEditor({
         el.style.top = `${p[1]}px`;
         el.style.width = `${geom.w * s}px`;
         el.style.fontSize = `${style.size * s}px`;
-        el.style.padding = `${TEXT_PAD * s}px`;
+        el.style.padding = `${textPad({ note }) * s}px`;
         el.style.height = 'auto';
-        el.style.height = `${el.scrollHeight}px`;
+        el.style.height = `${Math.max(el.scrollHeight, note ? geom.w * 0.8 * s : 0)}px`;
+        if (note) el.style.background = note;
       }
       raf = requestAnimationFrame(place);
     };
     place();
     return () => cancelAnimationFrame(raf);
-  }, [engine, geom.pageId, geom.x, geom.y, geom.w, style.size]);
+  }, [engine, geom.pageId, geom.x, geom.y, geom.w, style.size, note]);
 
   return (
     <textarea

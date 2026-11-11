@@ -6,7 +6,7 @@
 L'inventaire détaillé des fonctions de Goodnotes (observées sur vos captures, documentées, propositions) et leurs tests est
 dans [AUDIT.md](AUDIT.md). Le détail des corrections du 11/11/2026 est dans [CORRECTIONS.md](CORRECTIONS.md).
 
-Dernière mise à jour : 11/11/2026 (2ᵉ lot : écriture, voir [ECRITURE.md](ECRITURE.md)).
+Dernière mise à jour : 11/11/2026 (2ᵉ lot : écriture, voir [ECRITURE.md](ECRITURE.md) ; 3ᵉ lot : menus et outils, voir [OUTILS.md](OUTILS.md)).
 
 ## Écriture
 
@@ -29,6 +29,13 @@ Dernière mise à jour : 11/11/2026 (2ᵉ lot : écriture, voir [ECRITURE.md](EC
 | Zoom / déplacement deux doigts, netteté | Rendu vectoriel | — | ✅ (iPad 🟡) |
 | Forme nette par maintien (droite, cercle, ellipse, rectangle) | Délai réglable, « garder le tracé libre », annulable | Ellipse alignée sur les axes | ✅ (iPad 🟡) |
 | Fenêtre de zoom d'écriture | Cadre déplaçable et redimensionnable, avance automatique, retour à la ligne, grossissement ×1,25–×8 | — | ✅ (iPad 🟡) |
+| Menus « Outils » et « Plus » (toujours accessibles, téléphone compris) | Panneau du bas sur téléphone | — | ✅ (iPad 🟡) |
+| Outil Formes, pointeur laser | Reconnaissance au lever ; laser éphémère non enregistré | — | ✅ (iPad 🟡) |
+| Règle | Déplacer (1 doigt), pivoter (2 doigts, ±15°), tracé collé au bord | Page principale seulement | ✅ (iPad 🟡) |
+| Notes repositionnables | 6 couleurs, texte modifiable | — | ✅ |
+| Aligner les objets | Aimantation et guides | Déplacement seulement (pas le redimensionnement) | ✅ |
+| Minuteur | Chrono et compte à rebours | — | ✅ |
+| Personnalisation de la barre d'outils | 12 éléments, position d'annuler | — | ✅ |
 | Conversion manuscrit → texte | Vérification avant remplacement ; saisie / Scribble (local), navigateur (local), Google Vision (clé personnelle, optionnel) | Qualité non évaluée ; voir [RECONNAISSANCE.md](RECONNAISSANCE.md) | 🔶 |
 
 ## Pages et navigation
@@ -38,6 +45,10 @@ Dernière mise à jour : 11/11/2026 (2ᵉ lot : écriture, voir [ECRITURE.md](EC
 | Navigation horizontale par défaut, arrêt net, compteur, boutons | Balayage (1 ou 2 doigts selon le mode), ← →, trackpad | ✅ |
 | Navigation verticale (préférence) | Défilement continu | ✅ |
 | Miniatures | Rendu paresseux | ✅ |
+| Favoris de pages, plan du carnet, accéder à une page | Menu Plus, onglets du panneau des pages | ✅ |
+| Changer de modèle (une page ou toutes) | Menu Plus | ✅ |
+| Supprimer certains éléments, effacer la page | Une action annulable | ✅ |
+| Tirer pour ajouter une page, numéro de page, barre latérale gauche/droite, écran toujours allumé | Menu Plus → Modification des documents | ✅ (Wake Lock 🟡) |
 | Ajouter, dupliquer, supprimer, réordonner | Panneau des pages | ✅ |
 | Chargement des pages à la demande | Page courante ± 1 | ✅ |
 | Plein écran / mode concentration / mode application | Trois modes distincts | ✅ (iPad 🟡) |

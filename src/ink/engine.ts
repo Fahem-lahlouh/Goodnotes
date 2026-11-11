@@ -50,6 +50,15 @@ const STALE_TOUCH_MS = 4000;
 export const ZOOM_ADVANCE_ZONE = 0.22;
 const ZOOM_MIN = 1.25;
 const ZOOM_MAX = 8;
+/** Règle : épaisseur à l'écran (px) et bande de « collage » du stylet le long d'un bord. */
+export const RULER_T = 76;
+const RULER_BAND_OUT = 30;
+const RULER_BAND_IN = 8;
+/** Pointeur laser : durée d'affichage puis de disparition (ms). */
+const LASER_HOLD = 700;
+const LASER_FADE = 600;
+/** Alignement des objets : distance d'aimantation (px écran). */
+const SNAP_PX = 6;
 
 type Handle = 'move' | 'nw' | 'ne' | 'sw' | 'se';
 
@@ -149,6 +158,23 @@ interface DrawI extends Base {
   shape: Shape | null;
   orig: number[] | null;
   shapePressure: number;
+  /** Outil Formes : reconnaissance au lever du stylet. */
+  shapeTool: boolean;
+  /** Tracé le long de la règle : droite (unités page) sur laquelle les points sont projetés. */
+  snap: { ox: number; oy: number; dx: number; dy: number } | null;
+}
+interface LaserI extends Base {
+  kind: 'laser';
+  /** Points en coordonnées monde (x, y). */
+  pts: number[];
+}
+interface RulerI extends Base {
+  kind: 'ruler';
+  /** Pointeurs qui tiennent la règle (1 : déplacer, 2 : pivoter), positions écran. */
+  ptrs: Map<number, { x: number; y: number }>;
+  from: { x: number; y: number; angle: number };
+  baseC: [number, number];
+  baseAng: number;
 }
 interface EraseI extends Base {
   kind: 'erase';
@@ -172,6 +198,11 @@ interface TransformI extends Base {
   k: number;
   anchor: [number, number];
   corner: [number, number];
+  /** Alignement des objets : boîte de départ et repères candidats (unités page). */
+  bbox0: BBox | null;
+  snapX: number[];
+  snapY: number[];
+  guides: { x: number | null; y: number | null };
 }
 interface FrameI extends Base {
   kind: 'frame';
@@ -202,7 +233,7 @@ interface NavI {
   samples: { t: number; x: number }[];
   tap: [number, number];
 }
-type ToolInteraction = DrawI | EraseI | SelectI | TransformI | FrameI | TextTapI;
+type ToolInteraction = DrawI | EraseI | SelectI | TransformI | FrameI | TextTapI | LaserI | RulerI;
 type Interaction = ToolInteraction | NavI;
 
 export interface Selection {
@@ -234,7 +265,19 @@ export interface ZoomState {
   y: number;
   w: number;
   h: number;
+  /** Marges utilisées pour le retour à la ligne et l'avance automatique (unités page). */
+  marginLeft: number;
+  marginRight: number;
 }
+
+export interface RulerState {
+  x: number;
+  y: number;
+  /** Angle en radians. */
+  angle: number;
+}
+
+export type ElementKind = 'ink' | 'pencil' | 'highlighter' | 'text' | 'note' | 'image';
 
 export interface PerfStats {
   fullRenderMs: number;
@@ -244,7 +287,7 @@ export interface PerfStats {
   pointsPerStroke: number;
 }
 
-export type TextEditRequest = { mode: 'edit'; item: TextItem } | { mode: 'create'; pageId: string; x: number; y: number; w: number };
+export type TextEditRequest = { mode: 'edit'; item: TextItem } | { mode: 'create'; pageId: string; x: number; y: number; w: number; note?: string };
 
 export interface ShapeCommit {
   strokeId: string;
@@ -268,6 +311,9 @@ export interface EngineCallbacks {
   /** Forme nette enregistrée : l'interface propose de revenir au tracé libre. */
   onShapeCommitted?: (c: ShapeCommit) => void;
   onZoom?: (z: ZoomState) => void;
+  /** Geste « tirer au-delà de la dernière page » relâché : ajouter une page. */
+  onAddPageRequest?: () => void;
+  onRuler?: (r: RulerState | null) => void;
 }
 
 interface Clipboard {
@@ -281,6 +327,11 @@ export class InkEngine {
   readonly main: Surface;
   private zoom: Surface | null = null;
   private zoomFrame: { pageId: string; x: number; y: number } | null = null;
+  /** Marges de la fenêtre de zoom choisies par l'utilisateur (null = selon le papier). */
+  private zoomMargin: { left: number | null; right: number | null } = { left: null, right: null };
+  private ruler: RulerState | null = null;
+  private laserTrails: { pts: number[]; end: number }[] = [];
+  private pullHint = false;
   private layout: PageRect[] = [];
   private bounds: BBox = [0, 0, 0, 0];
   private cur = 0;
@@ -792,7 +843,7 @@ export class InkEngine {
     const z = new Surface('zoom', host);
     this.zoom = z;
     this.bindSurface(z);
-    if (r) this.zoomFrame = { pageId: r.page.id, x: this.leftMargin(r.page), y: Math.max(0, Math.min(r.page.height, wy - r.y)) };
+    if (r) this.zoomFrame = { pageId: r.page.id, x: this.marginLeft(r.page), y: Math.max(0, Math.min(r.page.height, wy - r.y)) };
     // La page principale a rétréci (panneau ouvert) : on l'affiche en entier, cadre visible.
     this.main.resize();
     z.resize();
@@ -875,7 +926,7 @@ export class InkEngine {
 
   private emitZoom(force = false): void {
     const st = this.zoomState();
-    const key = `${st.open}|${st.factor.toFixed(2)}|${st.pageId}|${st.x.toFixed(1)}|${st.y.toFixed(1)}|${st.w.toFixed(1)}`;
+    const key = `${st.open}|${st.factor.toFixed(2)}|${st.pageId}|${st.x.toFixed(1)}|${st.y.toFixed(1)}|${st.w.toFixed(1)}|${st.marginLeft.toFixed(1)}|${st.marginRight.toFixed(1)}`;
     if (force || key !== this.lastZoomKey) {
       this.lastZoomKey = key;
       this.cb.onZoom?.(st);
@@ -885,7 +936,18 @@ export class InkEngine {
   zoomState(): ZoomState {
     const f = this.zoomFrame;
     const { w, h } = this.frameSize();
-    return { open: !!this.zoom, factor: this.settings.zoomFactor, pageId: f?.pageId ?? null, x: f?.x ?? 0, y: f?.y ?? 0, w, h };
+    const r = f && this.rectOf(f.pageId);
+    return {
+      open: !!this.zoom,
+      factor: this.settings.zoomFactor,
+      pageId: f?.pageId ?? null,
+      x: f?.x ?? 0,
+      y: f?.y ?? 0,
+      w,
+      h,
+      marginLeft: r ? this.marginLeft(r.page) : 0,
+      marginRight: r ? this.marginRight(r.page) : 0,
+    };
   }
 
   /** Grossissement de la fenêtre (borné). */
@@ -914,10 +976,89 @@ export class InkEngine {
     this.ensureFrameVisible();
   }
 
-  /** Avance le cadre vers la droite (ou la gauche) d'environ 60 % de sa largeur. */
-  zoomAdvance(dir = 1): void {
+  /** Marge gauche du retour à la ligne (réglée par l'utilisateur, sinon selon le papier). */
+  private marginLeft(p: Page): number {
+    return Math.max(0, Math.min(p.width * 0.6, this.zoomMargin.left ?? this.leftMargin(p)));
+  }
+
+  /** Marge droite : au-delà, l'avance automatique passe à la ligne suivante. */
+  private marginRight(p: Page): number {
+    const def = p.width - Math.min(16, p.width * 0.03);
+    return Math.max(this.marginLeft(p) + 40, Math.min(p.width, this.zoomMargin.right ?? def));
+  }
+
+  private marginStep(p: Page): number {
+    if (p.paper.kind === 'blank') return 16;
+    const sp = Math.max(8, p.paper.spacing || 32);
+    return p.paper.kind === 'lined' ? sp / 2 : sp;
+  }
+
+  /**
+   * Marge gauche +/- un pas (boutons « retrait » de la fenêtre de zoom). Le cadre se place
+   * aussitôt à la nouvelle marge.
+   */
+  zoomIndent(dir: 1 | -1): void {
+    const f = this.zoomFrame;
+    const r = f && this.rectOf(f.pageId);
+    if (!f || !r) return;
+    const old = this.marginLeft(r.page);
+    this.zoomMargin.left = Math.max(0, Math.min(r.page.width * 0.6, old + dir * this.marginStep(r.page)));
+    f.x = this.marginLeft(r.page);
+    this.clampFrame();
+    this.updateZoomView();
+    this.emitZoom(true);
+  }
+
+  /** Marge droite +/- un pas (menu « … » de la fenêtre de zoom). */
+  zoomRightMargin(dir: 1 | -1): void {
+    const f = this.zoomFrame;
+    const r = f && this.rectOf(f.pageId);
+    if (!f || !r) return;
+    this.zoomMargin.right = Math.max(this.marginLeft(r.page) + 40, Math.min(r.page.width, this.marginRight(r.page) + dir * this.marginStep(r.page)));
+    this.invalidateLive();
+    this.emitZoom(true);
+  }
+
+  /** Marges par défaut (selon le papier). */
+  resetZoomMargins(): void {
+    this.zoomMargin = { left: null, right: null };
+    this.invalidateLive();
+    this.emitZoom(true);
+  }
+
+  /**
+   * Avance le cadre d'environ 60 % de sa largeur (ou recule). Avec `wrap` (avance automatique),
+   * arrivé à la marge droite, le cadre passe au début de la ligne suivante.
+   */
+  zoomAdvance(dir = 1, wrap = false): void {
+    const f = this.zoomFrame;
+    const r = f && this.rectOf(f.pageId);
+    if (!f || !r) return;
     const { w } = this.frameSize();
-    this.moveZoomFrame(dir * w * 0.6, 0);
+    if (dir < 0) {
+      this.moveZoomFrame(-w * 0.6, 0);
+      return;
+    }
+    const limit = this.marginRight(r.page) - w;
+    const target = Math.min(f.x + w * 0.6, Math.max(f.x, limit));
+    if (wrap && target <= f.x + 1) {
+      this.zoomNewline();
+      return;
+    }
+    this.moveZoomFrame(target - f.x, 0);
+  }
+
+  /** Place le cadre à un endroit de la page (toucher la page au doigt pendant que la fenêtre est ouverte). */
+  moveZoomFrameTo(pageId: string, px: number, py: number): void {
+    const f = this.zoomFrame;
+    if (!f || !this.rectOf(pageId)) return;
+    const { w, h } = this.frameSize();
+    f.pageId = pageId;
+    f.x = px - w * 0.1;
+    f.y = py - h * 0.6;
+    this.clampFrame();
+    this.updateZoomView();
+    this.ensureFrameVisible();
   }
 
   /** Retour à la ligne : cadre à la marge gauche, une ou plusieurs lignes plus bas (aligné sur le papier). */
@@ -927,10 +1068,10 @@ export class InkEngine {
     if (!f || !r) return;
     const { h } = this.frameSize();
     const p = r.page.paper;
-    const s = p.spacing || 32;
+    const sp = p.spacing || 32;
     const lined = p.kind !== 'blank';
-    const step = lined ? s * Math.max(1, Math.round((h * 0.65) / s)) : h * 0.65;
-    f.x = this.leftMargin(r.page);
+    const step = lined ? sp * Math.max(1, Math.round((h * 0.65) / sp)) : h * 0.65;
+    f.x = this.marginLeft(r.page);
     f.y += step;
     this.clampFrame();
     this.updateZoomView();
@@ -1019,6 +1160,14 @@ export class InkEngine {
     let a = this.interaction;
 
     if (e.pointerType === 'touch') {
+      // Deuxième doigt sur la règle : rotation.
+      if (a?.kind === 'ruler' && a.pointerType === 'touch' && a.surf === surf) {
+        if (a.ptrs.size < 2) {
+          a.ptrs.set(e.pointerId, { x: s.x, y: s.y });
+          this.rebaseRuler(a);
+        } else this.ignored.add(e.pointerId);
+        return;
+      }
       if (a && a.kind !== 'nav') {
         if (a.pointerType !== 'touch') {
           if (this.isStale(a, STALE_TOUCH_MS)) {
@@ -1045,6 +1194,10 @@ export class InkEngine {
       }
       // Doigts restés enregistrés alors qu'aucun geste n'est en cours : fin perdue, on repart à zéro.
       if (!a && this.touches.size > 0) this.touches.clear();
+      if (!a && surf.kind === 'main' && this.hitRuler(s.x, s.y)?.zone === 'body') {
+        this.startRuler(e, s, surf);
+        return;
+      }
       this.touches.set(e.pointerId, { x: s.x, y: s.y, sx: s.x, sy: s.y, surf });
       if (a?.kind === 'nav') {
         if (a.source === 'touch' && a.surf === surf) {
@@ -1104,6 +1257,11 @@ export class InkEngine {
       this.startFrame(e, s, surf);
       return;
     }
+    // Stylet ou souris sur le corps de la règle : on la déplace (près d'un bord : on trace le long).
+    if (surf.kind === 'main' && this.tool !== 'select' && this.hitRuler(s.x, s.y)?.zone === 'body') {
+      this.startRuler(e, s, surf);
+      return;
+    }
     this.startTool(e, s, surf);
   }
 
@@ -1157,15 +1315,22 @@ export class InkEngine {
       return;
     }
 
-    if (tool === 'pen' || tool === 'highlighter') {
+    if (tool === 'laser') {
+      const l: LaserI = { kind: 'laser', ...base, pts: [wx, wy] };
+      this.interaction = l;
+      this.invalidateLive();
+      return;
+    }
+
+    if (tool === 'pen' || tool === 'highlighter' || tool === 'shape') {
       const page = this.pageAt(wx, wy);
       if (!page) return;
       if (!this.session.isLoaded(page.page.id)) {
         this.cb.onNotice?.('Page en cours de chargement…');
         return;
       }
-      const inkTool: InkTool = tool === 'pen' ? this.styles.penType : 'highlighter';
-      const ink = tool === 'pen' ? this.styles.pens[this.styles.penType] : this.styles.highlighter;
+      const inkTool: InkTool = tool === 'highlighter' ? 'highlighter' : this.styles.penType;
+      const ink = tool === 'highlighter' ? this.styles.highlighter : this.styles.pens[this.styles.penType];
       const d: DrawI = {
         kind: 'draw',
         ...base,
@@ -1184,6 +1349,8 @@ export class InkEngine {
         shape: null,
         orig: null,
         shapePressure: 0.5,
+        shapeTool: tool === 'shape',
+        snap: surf.kind === 'main' ? this.rulerSnap(s.x, s.y, page, ink.width) : null,
       };
       this.interaction = d;
       this.pushSample(d, s);
@@ -1216,7 +1383,8 @@ export class InkEngine {
         se: [[b[2], b[3]], [b[0], b[1]]],
       };
       const [corner, anchor] = handle === 'move' ? [[0, 0] as [number, number], [0, 0] as [number, number]] : corners[handle];
-      this.interaction = { kind: 'transform', ...base, handle, page, start: [wx, wy], dx: 0, dy: 0, k: 1, anchor, corner };
+      const cand = handle === 'move' && this.settings.alignObjects ? this.snapCandidates(page, this.selection.ids) : { x: [], y: [] };
+      this.interaction = { kind: 'transform', ...base, handle, page, start: [wx, wy], dx: 0, dy: 0, k: 1, anchor, corner, bbox0: b, snapX: cand.x, snapY: cand.y, guides: { x: null, y: null } };
       this.hidden = new Set(this.selection.ids);
       for (const sf of this.surfaces()) sf.needFull = true;
       this.schedule();
@@ -1244,8 +1412,14 @@ export class InkEngine {
    */
   private pushSample(a: DrawI, s: Sample): void {
     const [wx, wy] = a.surf.vp.toWorld(s.x, s.y);
-    const x = wx - a.page.x;
-    const y = wy - a.page.y;
+    let x = wx - a.page.x;
+    let y = wy - a.page.y;
+    if (a.snap) {
+      // Le long de la règle : projection sur la droite du bord.
+      const t = (x - a.snap.ox) * a.snap.dx + (y - a.snap.oy) * a.snap.dy;
+      x = a.snap.ox + t * a.snap.dx;
+      y = a.snap.oy + t * a.snap.dy;
+    }
     const t = Math.max(0, s.time - a.t0);
     let p = s.pressure;
     if (Number.isNaN(p)) {
@@ -1330,6 +1504,14 @@ export class InkEngine {
       return;
     }
 
+    if (a.kind === 'ruler' && a.ptrs.has(e.pointerId)) {
+      const s = this.local(e, a.surf);
+      a.ptrs.set(e.pointerId, { x: s.x, y: s.y });
+      a.lastEvent = performance.now();
+      this.moveRuler(a);
+      return;
+    }
+
     if (a.kind === 'nav') {
       if (a.source === 'mouse' && a.pointerId === e.pointerId) {
         const s = this.local(e, a.surf);
@@ -1404,6 +1586,7 @@ export class InkEngine {
         if (a.handle === 'move') {
           a.dx = wx - a.start[0];
           a.dy = wy - a.start[1];
+          this.snapMove(a);
         } else {
           // Échelle uniforme : projection du pointeur sur la diagonale ancre → coin.
           const ax = a.page.x + a.anchor[0];
@@ -1439,6 +1622,17 @@ export class InkEngine {
         if (Math.hypot(s.x - a.sx, s.y - a.sy) > TAP_MAX_MOVE) a.moved = true;
         return;
       }
+      case 'laser': {
+        for (const ce of coalesced(e)) {
+          const s = this.local(ce, S);
+          const [wx, wy] = S.vp.toWorld(s.x, s.y);
+          a.pts.push(wx, wy);
+        }
+        this.invalidateLive();
+        return;
+      }
+      case 'ruler':
+        return;
     }
   }
 
@@ -1458,6 +1652,14 @@ export class InkEngine {
       }
     }
     if (!a) return;
+    if (a.kind === 'ruler' && a.ptrs.has(e.pointerId)) {
+      a.ptrs.delete(e.pointerId);
+      if (a.ptrs.size === 0) {
+        this.interaction = null;
+        this.cb.onRuler?.(this.ruler ? { ...this.ruler } : null);
+      } else this.rebaseRuler(a);
+      return;
+    }
     if (a.kind === 'nav') {
       if (a.source === 'mouse' && a.pointerId === e.pointerId) {
         this.interaction = null;
@@ -1469,11 +1671,26 @@ export class InkEngine {
     this.interaction = null;
 
     switch (a.kind) {
+      case 'laser':
+        this.endLaser(a);
+        return;
+      case 'ruler':
+        return;
       case 'draw':
         clearTimeout(a.holdTimer);
         if (!cancelled && !lost && !a.shape) {
           const s = this.local(e, a.surf);
           this.pushSample(a, { ...s, pressure: a.raw ? a.raw[2] : s.pressure });
+        }
+        if (!cancelled && a.shapeTool && !a.shape) {
+          // Outil Formes : reconnaissance au lever ; un tracé non reconnu est gardé tel quel.
+          const pts = this.liveData(a, false);
+          const sh = recognizeShape(pts);
+          if (sh) {
+            a.orig = pts;
+            a.shape = sh;
+            a.shapePressure = meanPressure(pts);
+          }
         }
         // Même interrompu (geste système), un trait déjà tracé est conservé.
         if (!cancelled || a.data.length >= POINT_STRIDE * 2 || a.shape) this.commitStroke(a);
@@ -1514,7 +1731,8 @@ export class InkEngine {
     if (a.kind === 'draw') {
       clearTimeout(a.holdTimer);
       if (a.data.length >= POINT_STRIDE || a.shape) this.commitStroke(a);
-    } else if (a.kind === 'erase') this.session.endBatch();
+    } else if (a.kind === 'laser') this.endLaser(a);
+    else if (a.kind === 'erase') this.session.endBatch();
     else if (a.kind === 'transform') this.finishTransform(a, fromVisibility);
     else if (a.kind === 'select' && !fromVisibility) this.finishSelect(a);
     this.invalidateLive();
@@ -1631,7 +1849,23 @@ export class InkEngine {
     a.samples.push({ t: now, x: a.rawTx });
     while (a.samples.length > 2 && now - a.samples[0].t > 120) a.samples.shift();
     this.clampView(this.settings.pageLayout === 'horizontal', a.rawTx, a.scaled);
+    this.updatePullHint(a.scaled);
     this.viewChanged();
+  }
+
+  /** Dépassement au-delà de la dernière page (mode horizontal) : propose d'ajouter une page. */
+  private updatePullHint(scaled: boolean): void {
+    let hint = false;
+    if (this.settings.pullToAddPage && this.settings.pageLayout === 'horizontal' && !scaled && !this.session.readOnly && this.cur === this.layout.length - 1) {
+      const vp = this.main.vp;
+      const [min, max] = this.txRange(this.pageBounds(this.cur));
+      const over = vp.tx - Math.min(max, Math.max(min, vp.tx));
+      hint = over < -Math.max(40, vp.width * 0.08);
+    }
+    if (hint !== this.pullHint) {
+      this.pullHint = hint;
+      this.main.needLive = true;
+    }
   }
 
   private endNav(a: NavI, allowTap: boolean): void {
@@ -1686,6 +1920,15 @@ export class InkEngine {
     const last = a.samples[a.samples.length - 1];
     const v = first && last && last.t > first.t ? (last.x - first.x) / (last.t - first.t) : 0;
     const th = Math.max(70, vp.width * 0.2);
+    if (this.pullHint) {
+      this.pullHint = false;
+      this.main.needLive = true;
+      if (allowTurn && !a.scaled) {
+        this.animateTo({ scale: vp.scale, tx: clamped, ty: vp.ty }, 160);
+        this.cb.onAddPageRequest?.();
+        return;
+      }
+    }
     if (allowTurn && !a.scaled) {
       if ((over < -th || (over < -24 && v < -0.45)) && this.cur < this.layout.length - 1) {
         this.goToPage(this.cur + 1);
@@ -1740,6 +1983,7 @@ export class InkEngine {
       while (a.samples.length > 2 && now - a.samples[0].t > 120) a.samples.shift();
       vp.tx = a.rawTx;
       this.clampView(true, a.rawTx);
+      this.updatePullHint(false);
       this.viewChanged();
       clearTimeout(this.wheelTimer);
       this.wheelTimer = window.setTimeout(() => {
@@ -1759,7 +2003,226 @@ export class InkEngine {
   /** Appui simple (doigt en mode stylet, ou outil texte). */
   private tapAction(sx: number, sy: number, surf: Surface): void {
     if (this.tool === 'text') this.textTap(sx, sy, surf);
-    else if (this.tool === 'select' && this.selection && !this.hitSelection(sx, sy, surf)) this.clearSelection();
+    else if (this.zoom && surf.kind === 'main') {
+      // Fenêtre de zoom ouverte : toucher la page y place le cadre.
+      const p = this.surfaceToPage('main', sx, sy);
+      if (p) this.moveZoomFrameTo(p.pageId, p.x, p.y);
+    } else if (this.tool === 'select' && this.selection && !this.hitSelection(sx, sy, surf)) this.clearSelection();
+  }
+
+  // ---------- Règle ----------
+
+  /** Affiche ou masque la règle (au centre de la vue, horizontale). */
+  setRuler(on: boolean): void {
+    if (on === !!this.ruler) return;
+    if (on) {
+      const vp = this.main.vp;
+      const [x, y] = vp.toWorld(vp.width / 2, vp.height * 0.45);
+      this.ruler = { x, y, angle: 0 };
+    } else {
+      this.ruler = null;
+      if (this.interaction?.kind === 'ruler') this.interaction = null;
+    }
+    this.cb.onRuler?.(this.ruler ? { ...this.ruler } : null);
+    this.invalidateLive();
+  }
+
+  rulerState(): RulerState | null {
+    return this.ruler ? { ...this.ruler } : null;
+  }
+
+  /** Position d'un point écran (page principale) par rapport à la règle. */
+  private hitRuler(sx: number, sy: number): { zone: 'body' | 'edge'; side: 1 | -1 } | null {
+    const r = this.ruler;
+    if (!r) return null;
+    const [cx, cy] = this.main.vp.toScreen(r.x, r.y);
+    const nx = -Math.sin(r.angle);
+    const ny = Math.cos(r.angle);
+    const d = (sx - cx) * nx + (sy - cy) * ny;
+    const side: 1 | -1 = d >= 0 ? 1 : -1;
+    const ad = Math.abs(d);
+    if (ad < RULER_T / 2 - RULER_BAND_IN) return { zone: 'body', side };
+    if (ad <= RULER_T / 2 + RULER_BAND_OUT) return { zone: 'edge', side };
+    return null;
+  }
+
+  /** Droite de collage (unités page) si le tracé commence près d'un bord de la règle. */
+  private rulerSnap(sx: number, sy: number, page: PageRect, width: number): DrawI['snap'] {
+    const r = this.ruler;
+    const h = this.hitRuler(sx, sy);
+    if (!r || !h || h.zone !== 'edge') return null;
+    const scale = this.main.vp.scale;
+    const off = (RULER_T / 2) / scale + width / 2;
+    const nx = -Math.sin(r.angle) * h.side;
+    const ny = Math.cos(r.angle) * h.side;
+    return { ox: r.x + nx * off - page.x, oy: r.y + ny * off - page.y, dx: Math.cos(r.angle), dy: Math.sin(r.angle) };
+  }
+
+  private startRuler(e: PointerEvent, s: Sample, surf: Surface): void {
+    this.capture(e, surf);
+    const now = performance.now();
+    const a: RulerI = {
+      kind: 'ruler',
+      pointerId: e.pointerId,
+      pointerType: e.pointerType,
+      surf,
+      startedAt: now,
+      lastEvent: now,
+      ptrs: new Map([[e.pointerId, { x: s.x, y: s.y }]]),
+      from: { ...this.ruler! },
+      baseC: [s.x, s.y],
+      baseAng: 0,
+    };
+    this.interaction = a;
+  }
+
+  private rulerPointers(a: RulerI): { c: [number, number]; ang: number | null } {
+    const p = Array.from(a.ptrs.values());
+    if (p.length >= 2) return { c: [(p[0].x + p[1].x) / 2, (p[0].y + p[1].y) / 2], ang: Math.atan2(p[1].y - p[0].y, p[1].x - p[0].x) };
+    return { c: [p[0].x, p[0].y], ang: null };
+  }
+
+  /** Nouveau point de départ quand un doigt se pose ou se lève. */
+  private rebaseRuler(a: RulerI): void {
+    if (!this.ruler) return;
+    a.from = { ...this.ruler };
+    const { c, ang } = this.rulerPointers(a);
+    a.baseC = c;
+    a.baseAng = ang ?? 0;
+  }
+
+  private moveRuler(a: RulerI): void {
+    if (!this.ruler) return;
+    const { c, ang } = this.rulerPointers(a);
+    const k = this.main.vp.scale;
+    let angle = a.from.angle;
+    if (ang !== null && a.ptrs.size >= 2) {
+      angle = a.from.angle + (ang - a.baseAng);
+      // Aimantation à 0°, 45°, 90°… (à 2,5° près).
+      const step = Math.PI / 4;
+      const snapped = Math.round(angle / step) * step;
+      if (Math.abs(angle - snapped) < (2.5 * Math.PI) / 180) angle = snapped;
+    }
+    this.ruler = { x: a.from.x + (c[0] - a.baseC[0]) / k, y: a.from.y + (c[1] - a.baseC[1]) / k, angle };
+    this.invalidateLive();
+  }
+
+  /** Tourne la règle d'un pas (boutons, souris ou clavier). */
+  rotateRuler(deg: number): void {
+    if (!this.ruler) return;
+    let a = this.ruler.angle + (deg * Math.PI) / 180;
+    a = Math.round(a / ((Math.PI / 180) * 0.5)) * ((Math.PI / 180) * 0.5);
+    this.ruler = { ...this.ruler, angle: a };
+    this.cb.onRuler?.({ ...this.ruler });
+    this.invalidateLive();
+  }
+
+  // ---------- Pointeur laser ----------
+
+  private endLaser(a: LaserI): void {
+    if (a.pts.length >= 2) this.laserTrails.push({ pts: a.pts, end: performance.now() });
+    this.invalidateLive();
+  }
+
+  // ---------- Alignement des objets ----------
+
+  /** Repères d'alignement de la page : centre de la page, bords et centres des autres éléments. */
+  private snapCandidates(page: PageRect, exclude: Set<string>): { x: number[]; y: number[] } {
+    const x = [page.page.width / 2];
+    const y = [page.page.height / 2];
+    const add = (b: BBox) => {
+      x.push(b[0], (b[0] + b[2]) / 2, b[2]);
+      y.push(b[1], (b[1] + b[3]) / 2, b[3]);
+    };
+    let n = 0;
+    for (const st of this.session.getStrokes(page.page.id)) {
+      if (exclude.has(st.id)) continue;
+      if (++n > 3000) break;
+      add(st.bbox);
+    }
+    for (const it of this.session.getItems(page.page.id)) if (!exclude.has(it.id)) add(itemBBox(it));
+    return { x, y };
+  }
+
+  /** Aimante le déplacement d'une sélection sur les repères proches et mémorise les guides affichés. */
+  private snapMove(a: TransformI): void {
+    a.guides = { x: null, y: null };
+    if (!this.settings.alignObjects || !a.bbox0) return;
+    const tol = SNAP_PX / a.surf.vp.scale;
+    const b = a.bbox0;
+    const best = (vals: number[], cands: number[]): { d: number; v: number } | null => {
+      let r: { d: number; v: number } | null = null;
+      for (const c of cands) {
+        for (const m of vals) {
+          const d = c - m;
+          if (Math.abs(d) <= tol && (!r || Math.abs(d) < Math.abs(r.d))) r = { d, v: c };
+        }
+      }
+      return r;
+    };
+    const bx = best([b[0] + a.dx, (b[0] + b[2]) / 2 + a.dx, b[2] + a.dx], a.snapX);
+    const by = best([b[1] + a.dy, (b[1] + b[3]) / 2 + a.dy, b[3] + a.dy], a.snapY);
+    if (bx) {
+      a.dx += bx.d;
+      a.guides.x = bx.v;
+    }
+    if (by) {
+      a.dy += by.d;
+      a.guides.y = by.v;
+    }
+  }
+
+  // ---------- Contenu de page ----------
+
+  private kindOf(el: Stroke | PageItem): ElementKind {
+    if ('points' in el) return el.tool === 'highlighter' ? 'highlighter' : el.tool === 'pencil' ? 'pencil' : 'ink';
+    if (el.kind === 'image') return 'image';
+    return el.note ? 'note' : 'text';
+  }
+
+  /** Nombre d'éléments de chaque type sur une page. */
+  countKinds(pageId: string): Record<ElementKind, number> {
+    const out: Record<ElementKind, number> = { ink: 0, pencil: 0, highlighter: 0, text: 0, note: 0, image: 0 };
+    for (const st of this.session.getStrokes(pageId)) out[this.kindOf(st)]++;
+    for (const it of this.session.getItems(pageId)) out[this.kindOf(it)]++;
+    return out;
+  }
+
+  /** Supprime les éléments des types choisis sur une page (une action, annulable). Renvoie le nombre supprimé. */
+  removeKinds(pageId: string, kinds: ElementKind[], label = 'Supprimer certains éléments'): number {
+    if (!this.session.isLoaded(pageId)) return 0;
+    const want = new Set(kinds);
+    const changes: Change[] = [
+      ...this.session.getStrokes(pageId).filter((st) => want.has(this.kindOf(st))).map((st): Change => ({ kind: 'stroke', id: st.id, pageId, before: st })),
+      ...this.session.getItems(pageId).filter((it) => want.has(this.kindOf(it))).map((it): Change => ({ kind: 'item', id: it.id, pageId, before: it })),
+    ];
+    if (!changes.length) return 0;
+    this.revealPage(pageId);
+    this.clearSelection();
+    return this.session.apply(changes, label) ? changes.length : 0;
+  }
+
+  /** Efface tout le contenu d'une page (une action, annulable). */
+  clearPage(pageId: string): number {
+    return this.removeKinds(pageId, ['ink', 'pencil', 'highlighter', 'text', 'note', 'image'], 'Effacer la page');
+  }
+
+  /** Ouvre l'édition d'une note repositionnable (carré coloré) au centre de la vue. */
+  startNote(color: string): boolean {
+    const r = this.layout[this.currentPageIndex()];
+    if (!r || this.session.readOnly || !this.session.isLoaded(r.page.id)) return false;
+    const vp = this.main.vp;
+    const [cx, cy] = vp.toWorld(vp.width / 2, vp.height / 2);
+    const w = Math.min(220, r.page.width * 0.4);
+    const x = Math.max(0, Math.min(r.page.width - w, cx - r.x - w / 2));
+    const y = Math.max(0, Math.min(r.page.height - w, cy - r.y - w / 2));
+    this.cb.onTextEdit?.({ mode: 'create', pageId: r.page.id, x, y, w, note: color });
+    return true;
+  }
+
+  /** Page principale : identifiant de la page affichée. */
+  currentPageId(): string | null {
+    return this.layout[this.currentPageIndex()]?.page.id ?? null;
   }
 
   // ---------- Historique ----------
@@ -1829,7 +2292,7 @@ export class InkEngine {
     this.perf.pointsPerStroke = points.length / POINT_STRIDE;
     const ok = this.session.apply([{ kind: 'stroke', id: stroke.id, pageId: stroke.pageId, after: stroke }], a.shape ? `Forme : ${shapeLabel(a.shape)}` : 'Trait');
     if (!ok) return;
-    if (a.shape && a.orig) {
+    if (a.shape && a.orig && !a.shapeTool) {
       this.cb.onShapeHint?.(null);
       this.cb.onShapeCommitted?.({ strokeId: stroke.id, pageId: stroke.pageId, label: shapeLabel(a.shape), original: Float32Array.from(a.orig) });
     }
@@ -1837,7 +2300,7 @@ export class InkEngine {
     if (a.surf.kind === 'zoom' && this.settings.zoomAutoAdvance && this.zoomFrame && this.zoomFrame.pageId === stroke.pageId && a.tool !== 'highlighter') {
       const { w } = this.frameSize();
       const zoneStart = this.zoomFrame.x + w * (1 - ZOOM_ADVANCE_ZONE);
-      if (stroke.bbox[2] > zoneStart) this.zoomAdvance(1);
+      if (stroke.bbox[2] > zoneStart) this.zoomAdvance(1, true);
     }
   }
 
@@ -2204,7 +2667,7 @@ export class InkEngine {
     if (req.mode === 'edit') {
       const before = this.session.getItem(req.item.pageId, req.item.id) as TextItem | undefined;
       if (!before) return;
-      if (!clean) {
+      if (!clean && !before.note) {
         this.session.apply([{ kind: 'item', id: before.id, pageId: before.pageId, before }], 'Supprimer le texte');
         return;
       }
@@ -2214,10 +2677,12 @@ export class InkEngine {
       if (!same) this.session.apply([{ kind: 'item', id: before.id, pageId: before.pageId, before, after: next }], 'Modifier le texte');
       return;
     }
-    if (!clean || !this.session.isLoaded(req.pageId)) return;
+    // Une note repositionnable est créée même vide (on y écrira plus tard) ; un bloc de texte vide, non.
+    if ((!clean && !req.note) || !this.session.isLoaded(req.pageId)) return;
     const it: TextItem = { kind: 'text', id: newId(), pageId: req.pageId, x: req.x, y: req.y, w: width ?? req.w, h: 0, text: clean, ...style, order: nextOrder(), createdAt: Date.now(), v: 2 };
+    if (req.note) it.note = req.note;
     it.h = textHeight(it);
-    this.session.apply([{ kind: 'item', id: it.id, pageId: it.pageId, after: it }], 'Ajouter du texte');
+    this.session.apply([{ kind: 'item', id: it.id, pageId: it.pageId, after: it }], req.note ? 'Ajouter une note' : 'Ajouter du texte');
   }
 
   /** Insère une image (déjà enregistrée dans le magasin binaire) sur la page courante. */
@@ -2347,6 +2812,12 @@ export class InkEngine {
         }
         s.needLive = true;
       }
+    }
+    if (this.laserTrails.length) {
+      const t = performance.now();
+      this.laserTrails = this.laserTrails.filter((tr) => t - tr.end < LASER_HOLD + LASER_FADE);
+      for (const s of this.surfaces()) s.needLive = true;
+      this.schedule();
     }
     for (const s of this.surfaces()) {
       if (s.needLive) {
@@ -2586,14 +3057,169 @@ export class InkEngine {
         ctx.lineWidth = 1.2;
         ctx.strokeStyle = 'rgba(30,36,51,0.65)';
         ctx.stroke();
-      } else if (this.tool === 'pen' || this.tool === 'highlighter') {
-        const st = this.tool === 'pen' ? this.styles.pens[this.styles.penType] : this.styles.highlighter;
+      } else if (this.settings.hoverPreview && (this.tool === 'pen' || this.tool === 'highlighter' || this.tool === 'shape')) {
+        const st = this.tool === 'highlighter' ? this.styles.highlighter : this.styles.pens[this.styles.penType];
         ctx.arc(hover.x, hover.y, Math.max(1.5, (st.width * scale) / 2), 0, Math.PI * 2);
         ctx.fillStyle = st.color;
         ctx.globalAlpha = this.tool === 'highlighter' ? 0.3 : 0.5;
         ctx.fill();
         ctx.globalAlpha = 1;
+      } else if (this.settings.hoverPreview && this.tool === 'laser') {
+        ctx.arc(hover.x, hover.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = '#ff3b30';
+        ctx.fill();
       }
+    }
+
+    this.renderOverlays(sf, ctx);
+  }
+
+  /** Règle, pointeur laser, guides d'alignement, indication « ajouter une page ». */
+  private renderOverlays(sf: Surface, ctx: CanvasRenderingContext2D): void {
+    const d = sf.dpr;
+    const a = this.interaction;
+
+    // Guides d'alignement pendant un déplacement.
+    if (a?.kind === 'transform' && (a.guides.x !== null || a.guides.y !== null)) {
+      this.pageTransform(ctx, a.page, sf);
+      ctx.save();
+      ctx.strokeStyle = '#e8457a';
+      ctx.lineWidth = 1 / sf.vp.scale;
+      ctx.setLineDash([4 / sf.vp.scale, 3 / sf.vp.scale]);
+      ctx.beginPath();
+      if (a.guides.x !== null) {
+        ctx.moveTo(a.guides.x, 0);
+        ctx.lineTo(a.guides.x, a.page.page.height);
+      }
+      if (a.guides.y !== null) {
+        ctx.moveTo(0, a.guides.y);
+        ctx.lineTo(a.page.page.width, a.guides.y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Pointeur laser : tracés en cours et tracés qui s'effacent.
+    const now = performance.now();
+    const trails: { pts: number[]; alpha: number }[] = this.laserTrails.map((t) => {
+      const age = now - t.end;
+      return { pts: t.pts, alpha: age < LASER_HOLD ? 1 : Math.max(0, 1 - (age - LASER_HOLD) / LASER_FADE) };
+    });
+    if (a?.kind === 'laser') trails.push({ pts: a.pts, alpha: 1 });
+    if (trails.length) {
+      ctx.save();
+      ctx.setTransform(d, 0, 0, d, 0, 0);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      for (const t of trails) {
+        if (t.alpha <= 0 || t.pts.length < 2) continue;
+        ctx.globalAlpha = t.alpha;
+        ctx.beginPath();
+        for (let i = 0; i < t.pts.length; i += 2) {
+          const [x, y] = sf.vp.toScreen(t.pts[i], t.pts[i + 1]);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        if (t.pts.length === 2) {
+          const [x, y] = sf.vp.toScreen(t.pts[0], t.pts[1]);
+          ctx.lineTo(x + 0.1, y);
+        }
+        ctx.shadowColor = 'rgba(255, 59, 48, 0.9)';
+        ctx.shadowBlur = 12;
+        ctx.strokeStyle = '#ff3b30';
+        ctx.lineWidth = 5;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(255, 240, 238, 0.95)';
+        ctx.lineWidth = 1.6;
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // Marges de la fenêtre de zoom (retour à la ligne et avance automatique).
+    if (this.zoom && this.zoomFrame) {
+      const r = this.rectOf(this.zoomFrame.pageId);
+      if (r) {
+        this.pageTransform(ctx, r, sf);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(47, 110, 220, 0.45)';
+        ctx.lineWidth = 1.2 / sf.vp.scale;
+        ctx.setLineDash([5 / sf.vp.scale, 4 / sf.vp.scale]);
+        ctx.beginPath();
+        for (const mx of [this.marginLeft(r.page), this.marginRight(r.page)]) {
+          ctx.moveTo(mx, 0);
+          ctx.lineTo(mx, r.page.height);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    if (sf.kind !== 'main') return;
+
+    // Règle.
+    const ru = this.ruler;
+    if (ru) {
+      const [cx, cy] = sf.vp.toScreen(ru.x, ru.y);
+      const L = Math.hypot(sf.vp.width, sf.vp.height) + 200;
+      const T = RULER_T;
+      ctx.save();
+      ctx.setTransform(d, 0, 0, d, 0, 0);
+      ctx.translate(cx, cy);
+      ctx.rotate(ru.angle);
+      ctx.fillStyle = 'rgba(244, 241, 232, 0.82)';
+      ctx.strokeStyle = 'rgba(40, 46, 60, 0.55)';
+      ctx.lineWidth = 1;
+      ctx.fillRect(-L, -T / 2, 2 * L, T);
+      ctx.strokeRect(-L, -T / 2, 2 * L, T);
+      // Graduations (tous les 10 px écran, longues tous les 50 px).
+      ctx.beginPath();
+      for (let x = -Math.floor(L / 10) * 10; x <= L; x += 10) {
+        const len = x % 50 === 0 ? 14 : 7;
+        ctx.moveTo(x, -T / 2);
+        ctx.lineTo(x, -T / 2 + len);
+        ctx.moveTo(x, T / 2);
+        ctx.lineTo(x, T / 2 - len);
+      }
+      ctx.strokeStyle = 'rgba(40, 46, 60, 0.6)';
+      ctx.stroke();
+      // Angle affiché au centre.
+      let deg = Math.round((((ru.angle * 180) / Math.PI) % 180 + 180) % 180);
+      if (deg > 90) deg = 180 - deg;
+      const label = `${deg}°`;
+      ctx.font = '600 13px system-ui, -apple-system, sans-serif';
+      const tw = ctx.measureText(label).width + 16;
+      ctx.fillStyle = 'rgba(36, 54, 92, 0.92)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(-tw / 2, -11, tw, 22, 11);
+      else ctx.rect(-tw / 2, -11, tw, 22);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, 0, 0.5);
+      ctx.restore();
+    }
+
+    // « Relâcher pour ajouter une page » (tirer au-delà de la dernière page).
+    if (this.pullHint) {
+      ctx.save();
+      ctx.setTransform(d, 0, 0, d, 0, 0);
+      const text = '＋  Relâcher pour ajouter une page';
+      ctx.font = '600 14px system-ui, -apple-system, sans-serif';
+      const w = ctx.measureText(text).width + 28;
+      const x = sf.vp.width - w - 16;
+      const y = sf.vp.height / 2 - 18;
+      ctx.fillStyle = 'rgba(36, 54, 92, 0.94)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x, y, w, 36, 18);
+      else ctx.rect(x, y, w, 36);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, x + 14, y + 18.5);
+      ctx.restore();
     }
   }
 

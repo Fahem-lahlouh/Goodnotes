@@ -51,6 +51,30 @@ describe('Sauvegarde et restauration', () => {
     expect(cc.pages[0].notebookId).toBe(copy.id);
   });
 
+  it('favoris et plan : conservés, et rattachés aux nouvelles pages lors d’une restauration en copie', async () => {
+    const { repo, db } = freshDB();
+    const nb = await repo.createNotebook({ title: 'Cours', cover: 'nuit' });
+    await repo.insertPage(nb.id, 1, nb.paper);
+    const ids = (await repo.getNotebook(nb.id))!.pageIds;
+    await repo.updateNotebook(nb.id, (n) => {
+      n.bookmarks = [ids[1]];
+      n.outline = [{ pageId: ids[1], title: 'Chapitre 2' }];
+    });
+    const file = await exportBackup(undefined, db);
+    expect(file.notebooks[0].bookmarks).toEqual([ids[1]]);
+    await restoreBackup(file, db);
+    const copy = (await repo.listNotebooks()).find((n) => n.id !== nb.id)!;
+    expect(copy.pageIds).toHaveLength(2);
+    expect(copy.pageIds).not.toContain(ids[1]);
+    expect(copy.bookmarks).toEqual([copy.pageIds[1]]);
+    expect(copy.outline).toEqual([{ pageId: copy.pageIds[1], title: 'Chapitre 2' }]);
+    // Supprimer la page retire aussi son favori et son entrée de plan.
+    await repo.deletePage(copy.id, copy.pageIds[1]);
+    const after = (await repo.getNotebook(copy.id))!;
+    expect(after.bookmarks).toEqual([]);
+    expect(after.outline).toEqual([]);
+  });
+
   it('relit un fichier de sauvegarde version 1 (avant les objets et dossiers)', async () => {
     const v1 = {
       format: 'calame-backup', version: 1, schema: 1, app: 'Calame', exportedAt: '2026-11-11T08:00:00.000Z',

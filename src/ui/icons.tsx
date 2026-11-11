@@ -71,6 +71,25 @@ const paths: Record<string, string> = {
   layoutV: 'M6 3h12v7H6zM6 14h12v7H6z',
   info: 'M12 21a9 9 0 100-18 9 9 0 000 18zM12 11v6M12 7.5h.01',
   cloudOff: 'M3 3l18 18M7.5 7.6A5 5 0 007 17.5h10M16.4 10.1A4.5 4.5 0 0120 17',
+  laser: 'M4 20l7.5-7.5M11.5 12.5l2-2 2.5 2.5-2 2-2.5-2.5zM16 4v2.5M20 8h-2.5M18.8 5.2L17 7M13 5.5l.8 1.2M18.5 11l-1.2-.8',
+  ruler: 'M3.5 15.5L15.5 3.5l5 5-12 12-5-5zM7 12l2 2M9.5 9.5l1.5 1.5M12 7l2 2M14.5 4.5l1.5 1.5',
+  note: 'M5 4h14v10l-6 6H5V4zM13 20v-6h6M8.5 8.5h7M8.5 11.5h4',
+  tools: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM17 14v6M14 17h6',
+  bookmark: 'M7 4h10v16l-5-3.5L7 20V4z',
+  outline: 'M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01',
+  goPage: 'M5 4h14v16H5zM9 12h7M13 9l3 3-3 3',
+  clearPage: 'M6 3h9l4 4v14H6V3zM15 3v4h4M9.5 12.5l5 5M14.5 12.5l-5 5',
+  someItems: 'M4 4h6v6H4zM14 14h6v6h-6zM4 14h6v6H4zM14.5 4.5l5 5M19.5 4.5l-5 5',
+  indent: 'M4 5h16M11 10h9M11 14h9M4 19h16M4 9.5l3 2.5-3 2.5',
+  outdent: 'M4 5h16M11 10h9M11 14h9M4 19h16M7 9.5L4 12l3 2.5',
+  sidebar: 'M4 4h16v16H4zM9 4v16',
+  sun: 'M12 16a4 4 0 100-8 4 4 0 000 8zM12 2.5v2M12 19.5v2M4.6 4.6L6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4',
+  grid: 'M4 4h16v16H4zM4 12h16M12 4v16',
+  timer: 'M12 21a8 8 0 100-16 8 8 0 000 16zM12 9v4l2.5 2M9.5 2.5h5M12 2.5V5',
+  play: 'M8 5v14l11-7L8 5z',
+  pause: 'M8 5h3v14H8zM13 5h3v14h-3z',
+  stop: 'M6 6h12v12H6z',
+  rotate: 'M20 11a8 8 0 10-2.3 5.7M20 5v6h-6',
 };
 
 export type IconName = keyof typeof paths;
@@ -83,7 +102,7 @@ export function Icon({ name, size = 22, filled, ...rest }: { name: IconName; siz
       viewBox="0 0 24 24"
       fill={filled ? 'currentColor' : 'none'}
       stroke="currentColor"
-      strokeWidth={1.8}
+      strokeWidth={name === 'more' ? 3.2 : 1.8}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"

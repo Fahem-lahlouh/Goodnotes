@@ -20,6 +20,12 @@ Précision du trait (filtre One Euro, encre jusqu'à la pointe, plus de saut au 
 marqueur, annuler/rétablir fiabilisé (gestes dont la fin est perdue), forme nette par maintien, fenêtre de zoom d'écriture,
 conversion manuscrit → texte avec vérification. Détail : [ECRITURE.md](ECRITURE.md) ; services : [RECONNAISSANCE.md](RECONNAISSANCE.md).
 
+## Menus et outils, 3ᵉ lot du 11/11/2026 : ✅ (validation iPad en attente)
+Interface téléphone et iPad réparée (barre d'outils qui cachait la fenêtre de zoom), menus « Outils » et « Plus »,
+Formes, pointeur laser, règle, notes repositionnables, minuteur, personnalisation de la barre, alignement des objets,
+favoris et plan, changement de modèle, suppression par type, tirer pour ajouter une page, marges de la fenêtre de zoom.
+Détail : [OUTILS.md](OUTILS.md).
+
 ## Étape 2 — Application quotidienne : 🔶 en cours
 Fait : bibliothèque (barre latérale, carnets, couvertures, formats, modèles, récents, favoris, tri, recherche titres,
 dossiers, corbeille), pages (ajout, duplication, suppression, réordonnancement, miniatures paresseuses), texte, images,
