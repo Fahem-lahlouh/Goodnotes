@@ -1028,10 +1028,26 @@ input[type='range'] {
 
 /* Dialogue de création */
 .modal-create {
+  min-width: 0;
   width: min(1020px, 100%);
-  height: min(720px, 100%);
-  flex-direction: row;
+  height: min(760px, 100%);
+  flex-direction: column;
   overflow: hidden;
+}
+/* En-tête et pied toujours visibles ; seul le contenu défile. */
+.create-head,
+.create-foot {
+  flex: none;
+}
+.create-head {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+.create-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
 }
 .create-side {
   flex: none;
@@ -1060,6 +1076,7 @@ input[type='range'] {
 .create-main {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }
@@ -1106,7 +1123,10 @@ input[type='range'] {
 }
 .create-gallery {
   flex: 1;
+  min-height: 0;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   padding: 8px 22px 16px;
 }
 .create-gallery h3 {
@@ -1909,6 +1929,17 @@ input[type='range'] {
     gap: 4px;
     margin-top: 8px;
     border-bottom: 1px solid var(--border);
+    /* Les onglets défilent au lieu d'élargir la page (sinon tout l'écran se décale sur téléphone). */
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .lib-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .lib-tabs button {
+    flex: none;
   }
   .lib-tabs button {
     min-height: var(--tap);
@@ -1936,8 +1967,26 @@ input[type='range'] {
     display: none;
   }
   .modal-create {
-    flex-direction: column;
     height: 100%;
+  }
+  /* Téléphone : toute la partie centrale défile d'un seul bloc (titre, couverture, filtres, modèles). */
+  .create-body {
+    flex-direction: column;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    /* Ombres de défilement : indiquent qu'il reste du contenu au-dessus ou en dessous. */
+    background:
+      linear-gradient(var(--surface) 30%, transparent) top / 100% 28px no-repeat local,
+      linear-gradient(transparent, var(--surface) 70%) bottom / 100% 28px no-repeat local,
+      radial-gradient(farthest-side at 50% 0, rgba(0, 0, 0, 0.28), transparent) top / 100% 12px no-repeat scroll,
+      radial-gradient(farthest-side at 50% 100%, rgba(0, 0, 0, 0.28), transparent) bottom / 100% 12px no-repeat scroll;
+  }
+  .create-main,
+  .create-gallery {
+    flex: none;
+    min-height: auto;
+    overflow: visible;
   }
   .create-side {
     width: auto;
@@ -1949,6 +1998,18 @@ input[type='range'] {
   }
   .create-side .field:last-child {
     display: none;
+  }
+  /* Le champ du titre se réduit ; la couverture garde sa taille. */
+  .create-side .field {
+    min-width: 0;
+    flex: 1;
+  }
+  .create-side .field:has(.cover-preview-btn) {
+    flex: none;
+  }
+  .create-side input {
+    width: 100%;
+    min-width: 0;
   }
   .cover-preview-btn {
     width: 90px;
