@@ -41,6 +41,7 @@ Base séparée `calame-safety` : copies de sécurité automatiques (JSON `.calam
 Carnet (`Notebook`) : champs facultatifs ajoutés le 11/11/2026 (3ᵉ lot), sans migration :
 `bookmarks?: string[]` (pages en favori) et `outline?: { pageId: string; title: string }[]` (plan du carnet).
 Bloc de texte (`TextItem`) : `note?: string` — couleur d'une note repositionnable.
+Style d'un trait : `res?: number` (4ᵉ lot) — résolution de saisie en unités page, utilisée par le lissage du rendu ; 0 = pas de lissage (formes nettes) ; absent = valeur par défaut. Les points enregistrés ne sont jamais modifiés par ce lissage.
 
 Le temps par point permet de rejouer l'écriture et, plus tard, de la synchroniser avec un enregistrement audio.
 

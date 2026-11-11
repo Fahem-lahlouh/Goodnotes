@@ -77,6 +77,7 @@ Voir [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | [docs/FEATURES.md](docs/FEATURES.md) | Matrice des fonctionnalités et état réel |
 | [docs/CORRECTIONS.md](docs/CORRECTIONS.md) | Corrections du 11/11/2026 : cause, correction, test, limites |
 | [docs/ECRITURE.md](docs/ECRITURE.md) | Écriture (2ᵉ lot) : précision, stylos, annuler fiable, formes nettes, fenêtre de zoom, conversion en texte |
+| [docs/RENDU.md](docs/RENDU.md) | Netteté des traits : diagnostic mesuré, corrections, ce qui a été testé (4ᵉ lot) |
 | [docs/OUTILS.md](docs/OUTILS.md) | Menus Outils et Plus, règle, Formes, laser, notes, minuteur, favoris et plan, téléphone (3ᵉ lot) |
 | [docs/RECONNAISSANCE.md](docs/RECONNAISSANCE.md) | Conversion manuscrit → texte : services, données envoyées, coûts |
 | [docs/AUDIT.md](docs/AUDIT.md) | Audit de Goodnotes et tableau de suivi |

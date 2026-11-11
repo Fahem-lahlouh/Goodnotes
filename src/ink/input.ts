@@ -9,6 +9,8 @@ export interface Sample {
   /** 0 = perpendiculaire, 1 = couché. */
   tilt: number;
   time: number;
+  /** Coordonnées avec partie décimale (sinon le navigateur les arrondit au pixel, comme Safari). */
+  fractional?: boolean;
 }
 
 type PE = PointerEvent & {
@@ -31,7 +33,7 @@ export function sampleFrom(e: PointerEvent, ox: number, oy: number): Sample {
   let pressure: number;
   if (e.pointerType === 'pen') pressure = e.pressure > 0 ? e.pressure : NaN;
   else pressure = 0.5;
-  return { x: e.clientX - ox, y: e.clientY - oy, pressure, tilt, time: e.timeStamp };
+  return { x: e.clientX - ox, y: e.clientY - oy, pressure, tilt, time: e.timeStamp, fractional: !Number.isInteger(e.clientX) || !Number.isInteger(e.clientY) };
 }
 
 /** Événements fusionnés par le navigateur entre deux frames (plus de points = trait plus fidèle). */

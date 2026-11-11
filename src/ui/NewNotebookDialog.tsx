@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { PAGE_FORMATS, pageSize, type CoverPattern, type Orientation, type PageFormat, type PaperColor, type PaperKind, type PaperSpec } from '../model/types';
 import { PAPER_COLOR_LABELS, PAPER_KINDS } from '../ink/paper';
 import { Cover, CoverPicker, PaperThumb } from './Cover';
@@ -30,9 +30,28 @@ export function NewNotebookDialog({ onClose, onCreate }: { onClose: () => void; 
   const paper: PaperSpec = { kind, color, spacing };
   const submit = () => onCreate({ title: title || 'Sans titre', cover: cover.color, coverPattern: cover.pattern, paper, format, orientation });
 
+  // Échap : ferme d'abord le choix de couverture, puis la fenêtre.
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      if (pickCover) setPickCover(false);
+      else onClose();
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [pickCover, onClose]);
+
   return (
     <div className="modal-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal modal-create" role="dialog" aria-modal="true" aria-label="Nouveau carnet">
+        <header className="modal-head create-head">
+          <h2>Nouveau carnet</h2>
+          <button className="icon-btn" onClick={onClose} aria-label="Fermer" title="Fermer (Échap)">
+            <Icon name="close" />
+          </button>
+        </header>
+        <div className="create-body">
         <div className="create-side">
           <label className="field">
             <span>Titre</span>
@@ -117,15 +136,16 @@ export function NewNotebookDialog({ onClose, onCreate }: { onClose: () => void; 
               </label>
             </div>
           )}
-          <footer className="modal-foot">
-            <button className="btn btn-ghost" onClick={onClose}>
-              Annuler
-            </button>
-            <button className="btn btn-primary" onClick={submit}>
-              Créer le carnet
-            </button>
-          </footer>
         </div>
+        </div>
+        <footer className="modal-foot create-foot">
+          <button className="btn btn-ghost" onClick={onClose}>
+            Annuler
+          </button>
+          <button className="btn btn-primary" onClick={submit}>
+            Créer le carnet
+          </button>
+        </footer>
       </div>
     </div>
   );

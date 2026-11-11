@@ -31,6 +31,55 @@ const zoomState = (page: Page) => page.evaluate(() => window.__calame!.engine.zo
 test.describe('Téléphone (390 × 844)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
+  test('nouveau carnet sur téléphone : fenêtre dans l’écran, bouton Fermer, contenu qui défile, Échap', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 664 }); // Safari avec ses barres
+    await page.goto('./');
+    // La bibliothèque ne dépasse plus en largeur (les onglets défilent).
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+    const open = async () => {
+      await page.getByRole('button', { name: 'Nouveau', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Carnet…' }).click();
+      await expect(page.getByRole('dialog', { name: 'Nouveau carnet' })).toBeVisible();
+    };
+    await open();
+    const dlg = page.getByRole('dialog', { name: 'Nouveau carnet' });
+    const inView = async (name: string) => {
+      const b = (await dlg.getByRole('button', { name, exact: true }).boundingBox())!;
+      return b.x >= 0 && b.y >= 0 && b.x + b.width <= 390 && b.y + b.height <= 664;
+    };
+    const box = (await dlg.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+    expect(box.y + box.height).toBeLessThanOrEqual(664);
+    // Couverture ouverte (comme sur la capture) : « Terminé » atteignable en faisant défiler, Fermer et Créer toujours visibles.
+    await dlg.getByRole('button', { name: 'Changer la couverture' }).click();
+    const body = dlg.locator('.create-body');
+    const sc = await body.evaluate((e) => ({ h: e.scrollHeight, c: e.clientHeight }));
+    expect(sc.h).toBeGreaterThan(sc.c);
+    await dlg.getByRole('button', { name: 'Terminé' }).scrollIntoViewIfNeeded();
+    expect(await inView('Terminé')).toBe(true);
+    expect(await inView('Fermer')).toBe(true);
+    expect(await inView('Créer le carnet')).toBe(true);
+    await dlg.getByRole('button', { name: 'Terminé' }).click();
+    await expect(dlg.getByRole('radiogroup', { name: 'Modèle de papier' })).toBeVisible();
+    // Bouton Fermer.
+    await dlg.getByRole('button', { name: 'Fermer', exact: true }).click();
+    await expect(dlg).toHaveCount(0);
+    // Échap : ferme d'abord le choix de couverture, puis la fenêtre.
+    await open();
+    await dlg.getByRole('button', { name: 'Changer la couverture' }).click();
+    await page.keyboard.press('Escape');
+    await expect(dlg.getByRole('radiogroup', { name: 'Modèle de papier' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(dlg).toHaveCount(0);
+    // Création toujours possible.
+    await open();
+    await dlg.getByLabel('Titre du carnet').fill('JAVA');
+    await dlg.getByRole('button', { name: 'Créer le carnet' }).click();
+    await expect(page.getByTestId('ink-host')).toBeVisible();
+  });
+
   test('barres lisibles, menu Outils toujours visible, fenêtre de zoom accessible et utilisable', async ({ page }) => {
     await start(page, 'Téléphone');
     const vw = 390;
