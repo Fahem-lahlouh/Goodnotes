@@ -70,6 +70,17 @@ pas les anciens traits). Aucune image bitmap n'est la source des données. Déta
 - Migrations : version de base IndexedDB + champ `v` sur chaque enregistrement, migrations pas à pas,
   refus explicite des données d'une version future.
 
+### D4 bis — Arbitrage des entrées, historique, pagination (11/11/2026)
+- **Un seul arbitre** (`InkEngine.onDown/onMove/onUp`) et **au plus une interaction active** : tracé, gomme, sélection,
+  transformation, navigation ou appui texte. Les règles stylet / doigt / souris sont décrites en tête de `src/ink/engine.ts`.
+- **Historique par document** dans `NotebookSession` : chaque étape = un ensemble de changements `{before, after}` sur des
+  traits et des objets, avec la page concernée (affichée avant d'annuler). Gestes continus regroupés (`beginBatch/endBatch`).
+- **Pagination** : mise en page horizontale (pages côte à côte) ou verticale (`computeLayout`) ; en horizontal, la vue est
+  contrainte à la page courante, le dépassement du bord pendant un geste décide du changement de page.
+- **Chargement paresseux** : à l'ouverture, seules les métadonnées des pages sont lues ; le contenu d'une page est chargé
+  quand elle devient visible ou voisine ; cache de chemins `Path2D` borné (LRU).
+- **Objets de page** : textes et images dans un magasin séparé ; ordre de rendu : papier → images → surligneur → texte → encre.
+
 ### D5 — Service worker
 Écrit à la main (≈70 lignes, `src/pwa/sw-template.js`) plutôt que Workbox (dont `workbox-build` remontait
 des alertes de sécurité). Il ne met en cache **que les fichiers de l'application** listés au build ; aucune

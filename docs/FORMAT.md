@@ -4,34 +4,49 @@
 Unités « page » : 1 unité = 1 px CSS à 96 dpi. Page A4 portrait = 794 × 1123. Indépendantes du zoom,
 de l'écran et de l'orientation.
 
-## Base locale (IndexedDB `calame`, version 1)
+## Base locale (IndexedDB `calame`, version 2)
 
 | Magasin | Clé | Index | Contenu |
 | --- | --- | --- | --- |
-| `notebooks` | `id` | — | Carnet : titre, couverture, papier par défaut, `pageIds` (ordre), favori, dates, `trashedAt` |
-| `pages` | `id` | `notebookId` | Page : dimensions, papier |
+| `notebooks` | `id` | — | Carnet : titre, couverture + motif, papier par défaut, format, orientation, type, dossier, `pageIds` (ordre), favori, dates, `trashedAt` |
+| `pages` | `id` | `notebookId` | Page : dimensions, papier (modèle, couleur, espacement) |
 | `strokes` | `id` | `pageId` | Trait (ci-dessous) |
+| `items` | `id` | `pageId` | Objets de page : blocs de texte et images (v2) |
+| `folders` | `id` | — | Dossiers (un niveau) (v2) |
+| `blobs` | `id` | — | Octets des images (v2) |
 | `meta` | `key` | — | Métadonnées (ex. date de dernière sauvegarde) |
 
-## Trait (`Stroke`, schéma v1)
+Base séparée `calame-safety` : copies de sécurité automatiques (JSON `.calame`) faites avant chaque mise à niveau de la base.
+
+## Trait (`Stroke`, schéma 2 — identique au schéma 1 sauf les nouveaux outils)
 
 ```ts
 {
   id: string;            // UUID v4
   pageId: string;
-  tool: 'pen' | 'highlighter';
+  tool: 'pen' | 'fountain' | 'brush' | 'pencil' | 'highlighter';   // 'pen' = stylo à bille
   color: '#rrggbb';
   width: number;         // épaisseur de base (unités page)
-  style: { thinning, streamline, tilt, realPressure };  // paramètres de rendu figés
+  style: { thinning, streamline, tilt, realPressure, nibAngle? };  // paramètres de rendu figés
   points: Float32Array;  // 5 valeurs par point : x, y, pression 0..1, t (ms depuis le début), inclinaison 0..1
   bbox: [minX, minY, maxX, maxY];
   order: number;         // empilement
   createdAt: number;
-  v: 1;
+  v: 1 | 2;             // 2 pour les traits créés depuis le 11/11/2026
 }
 ```
 
 Le temps par point permet de rejouer l'écriture et, plus tard, de la synchroniser avec un enregistrement audio.
+
+## Objets de page (schéma 2)
+
+```ts
+// Bloc de texte
+{ kind: 'text', id, pageId, x, y, w, h, text, font: 'sans'|'serif'|'mono'|'rounded'|'hand', size,
+  color, bold, italic, underline, align: 'left'|'center'|'right', order, createdAt, v: 2 }
+// Image (octets dans le magasin `blobs`)
+{ kind: 'image', id, pageId, x, y, w, h, blobId, mime, order, createdAt, v: 2 }
+```
 
 ## Fichier de sauvegarde `.calame`
 
@@ -40,13 +55,16 @@ JSON UTF-8 :
 ```json
 {
   "format": "calame-backup",
-  "version": 1,
-  "schema": 1,
+  "version": 2,
+  "schema": 2,
   "app": "Calame",
   "exportedAt": "2026-11-11T08:00:00.000Z",
   "notebooks": [ /* Notebook */ ],
   "pages": [ /* Page */ ],
-  "strokes": [ /* Stroke avec points en base64 */ ]
+  "strokes": [ /* Stroke avec points en base64 */ ],
+  "items": [ /* TextItem | ImageItem */ ],
+  "folders": [ /* Folder */ ],
+  "blobs": [ { "id": "...", "mime": "image/jpeg", "data": "base64…" } ]
 }
 ```
 
@@ -57,3 +75,5 @@ JSON UTF-8 :
 - Enregistrements : champ `v`, migrations pas à pas dans `src/storage/migrations.ts`, appliquées à la lecture
   (base et fichiers importés). Une donnée d'un schéma plus récent est refusée avec un message explicite.
 - v0 (accepté à l'import) : points en tableau, 4 valeurs par point, sans style.
+- v1 → v2 : ajout des champs de carnet `folderId`, `format`, `orientation`, `kind`, `coverPattern` (valeurs par défaut) ;
+  traits et pages inchangés. Les fichiers `.calame` version 1 sont relus (sans objets ni dossiers).

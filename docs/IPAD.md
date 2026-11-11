@@ -6,34 +6,45 @@
 3. Lancer Calame depuis l'icône : l'application s'ouvre **sans barre Safari** (mode standalone).
 4. Ouvrir une fois chaque écran avec du réseau, puis tester en mode Avion : l'app doit se lancer et écrire.
 
-Le mode standalone (écran d'accueil) est distinct du plein écran du navigateur (API Fullscreen), qui n'est pas
-utilisé. Les données de l'app installée sont séparées de celles de Safari : créez vos carnets **dans l'app
-installée** (ou transférez-les par sauvegarde/restauration).
+Le mode application (écran d'accueil) est distinct du plein écran du navigateur (bouton ⛶, API Fullscreen) : ce
+dernier n'est proposé que si Safari l'autorise, et Calame l'indique sinon. Le lancement depuis l'écran d'accueil reste la
+solution la plus fiable sur iPad. Les données de l'app installée sont séparées de celles de Safari : créez vos carnets
+**dans l'app installée** (ou transférez-les par sauvegarde/restauration).
 
-## Procédure de validation (≈ 15 min)
+## Procédure de validation (≈ 20 min)
 
-Activer d'abord **Réglages → Afficher les mesures de performance** et noter les valeurs affichées.
+Activer d'abord **Réglages → Afficher les mesures de performance** et noter les valeurs affichées. Vérifier dans
+**Réglages → Diagnostic** la version de Calame (elle doit correspondre au dernier déploiement).
 Reporter les résultats dans `docs/TESTS.md` (section « Validation iPad »).
 
 | # | Scénario | Attendu |
 | --- | --- | --- |
-| 1 | Écrire une ligne de texte rapidement au Pencil | Trait continu, sans angles ni trous ; la pointe suit sans retard gênant |
+| 1 | Écrire une ligne rapidement au Pencil, avec chacun des 4 stylos | Trait continu, sans retard gênant ; bille régulière, plume pleins/déliés, pinceau effilé, crayon granuleux |
 | 2 | Appuyer plus fort puis plus léger | Le trait s'épaissit puis s'affine |
-| 3 | Réglages → Effet de l'inclinaison 100 %, écrire stylet incliné | Trait plus large |
-| 4 | Poser la paume sur l'écran puis écrire | Aucun trait parasite, pas de défilement pendant l'écriture |
-| 5 | Faire glisser un doigt | La page défile, aucun trait (après la 1re utilisation du Pencil) |
-| 6 | Pincer à deux doigts, écrire, dézoomer | Zoom fluide ; le trait est exactement sous la pointe ; reste net |
-| 7 | Toucher à deux doigts / trois doigts | Annuler / rétablir |
-| 8 | Appui long au Pencil sans bouger | Pas de loupe, pas de menu, pas de sélection de texte |
-| 9 | Pivoter l'iPad pendant l'édition | Même endroit de la page affiché ; l'écriture reste alignée |
-| 10 | Gomme partielle au milieu d'un mot | Seule la zone touchée disparaît ; ⌘Z/2 doigts la restaure |
-| 11 | Lasso autour d'un mot, glisser, poignée bas-droite | Déplacement et redimensionnement ; persistent après relance |
-| 12 | Écrire puis **forcer la fermeture** (balayer l'app) immédiatement | À la réouverture, le dernier trait est présent |
-| 13 | Mode Avion → relancer → écrire → réactiver le réseau | Tout fonctionne ; aucune perte |
-| 14 | Exporter une sauvegarde vers Fichiers | Le fichier `.calame` apparaît dans Fichiers |
-| 15 | Clavier externe : P/H/E/L, ⌘Z, ⌘0 | Raccourcis actifs |
-| 16 | Lancer Calame dans Split View / Slide Over | Mise en page lisible, écriture correcte |
-| 17 | Mode concentration (icône ⛶) | Seules la barre d'outils et la page restent visibles |
+| 3 | Poser la paume puis écrire (mode « stylet uniquement ») | Aucun trait parasite, pas de défilement pendant l'écriture |
+| 4 | Bouton « Doigt : écrit » : écrire au doigt ; deux doigts pour défiler | Le doigt trace ; deux doigts naviguent sans laisser de trait |
+| 5 | Mode « stylet uniquement » : balayer d'un doigt vers la gauche puis la droite | Page suivante puis précédente, arrêt net ; un petit geste ne change pas de page |
+| 6 | Zoomer à deux doigts, balayer d'un doigt | Le geste déplace dans la page ; la page ne change qu'au-delà du bord |
+| 7 | Écrire après zoom, après rotation, après plein écran | Le trait est exactement sous la pointe |
+| 8 | Gomme : diamètre 64, mode partiel, sur 3 traits ; puis annuler | Le cercle correspond à la zone effacée ; une seule annulation restaure tout |
+| 9 | Lasso puis rectangle puis carré autour de mots ; déplacer, redimensionner, recolorer | Seuls les éléments attendus sont sélectionnés ; tout s'annule étape par étape |
+| 10 | Écrire sur la page 1, aller page 2, annuler | Calame revient page 1 et annule là |
+| 11 | Texte : toucher la page avec l'outil Texte, taper au clavier virtuel | Le champ reste visible au-dessus du clavier ; le bloc s'affiche après validation |
+| 12 | Insérer une photo depuis la bibliothèque de l'iPad | L'image apparaît sélectionnée, déplaçable |
+| 13 | Toucher à deux doigts / trois doigts | Annuler / rétablir (pas pendant un pincement) |
+| 14 | Appui long au Pencil sans bouger | Pas de loupe, pas de menu, pas de sélection de texte |
+| 15 | Bouton plein écran (Safari) | Plein écran obtenu, ou explication affichée si Safari le refuse |
+| 16 | Écrire puis **forcer la fermeture** de l'app immédiatement | À la réouverture, le dernier trait est présent |
+| 17 | Mode Avion → relancer → écrire → réactiver le réseau | Tout fonctionne ; aucune perte |
+| 18 | Exporter une sauvegarde vers Fichiers | Le fichier `.calame` apparaît dans Fichiers |
+| 19 | Clavier externe : P/H/E/S/T, ⌘Z, ⇧⌘Z, ← → | Raccourcis actifs |
+| 20 | Split View / Slide Over, portrait et paysage | Mise en page lisible, écriture correcte |
 
-Les points 1, 4 et 6 conditionnent la suite du projet : s'ils ne sont pas satisfaisants, ils seront traités
-avant toute nouvelle fonctionnalité.
+Les points 1, 3, 5 et 7 conditionnent la suite du projet : s'ils ne sont pas satisfaisants, ils seront traités avant toute
+nouvelle fonctionnalité.
+
+## Après une mise à jour
+Calame vérifie au démarrage et au retour au premier plan la version réellement servie (`version.json`, jamais mise en cache).
+Si une nouvelle version existe, le bandeau « Une nouvelle version de Calame est prête » apparaît : touchez **Mettre à jour**
+(vos écritures en attente sont enregistrées avant le rechargement). Si le bandeau n'apparaît pas, fermez complètement l'app
+(balayage vers le haut) puis rouvrez-la.
