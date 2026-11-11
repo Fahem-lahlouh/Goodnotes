@@ -35,5 +35,5 @@ fiches et répétition espacée, liens entre notes, vue partagée, modèles réu
 Mesures de performance sur iPad, accessibilité, déploiement vérifié.
 
 ## Points d'attention
-- WebKit en CI : étape informative à rendre bloquante après un premier passage vert.
+- WebKit en CI : bloquant depuis le premier passage vert (bibliothèque, pages, multi-onglets) ; pas de test d'écriture WebKit automatisé.
 - `getCoalescedEvents` sur Safari : un bogue d'identifiant de pointeur a été signalé sur iOS 18.2 ; Calame n'utilise pas cet identifiant.

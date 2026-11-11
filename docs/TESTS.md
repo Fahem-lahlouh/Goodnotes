@@ -15,8 +15,10 @@
 - `node scripts/check-secrets.mjs` : aucun secret
 
 ### Non testé automatiquement / limites
-- **Safari et WebKit** : non exécutables dans l'environnement de développement initial (téléchargement bloqué).
-  La CI GitHub exécute une étape WebKit « iPad Pro 11 » **informative** ; elle n'est pas encore validée.
+- **WebKit** (moteur de Safari, iPad Pro 11 émulé) : exécuté en CI GitHub uniquement. Premier passage le
+  11/11/2026 : **4/4** (création/réouverture et pages, corbeille, recherche, deux onglets). Les tests d'écriture
+  pilotent le stylet via le protocole Chromium et ne tournent donc pas sur WebKit : l'écriture sous Safari
+  reste à valider sur l'iPad.
 - **Apple Pencil réel** : latence, rejet de paume, pression réelle, survol, rotation : voir la procédure [IPAD.md](IPAD.md).
 - **Performances** : aucune mesure sur iPad n'a encore été faite. L'interface affiche des mesures réelles
   (temps de rendu, délai événement → frame, échantillons/s) à activer dans les réglages. Aucun chiffre n'est annoncé.

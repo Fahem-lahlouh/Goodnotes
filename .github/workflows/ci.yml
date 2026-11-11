@@ -31,10 +31,9 @@ jobs:
         run: npx playwright install --with-deps chromium webkit
       - name: Tests de bout en bout (Chromium bureau + iPad émulé)
         run: npx playwright test --trace off
-      # WebKit (moteur de Safari) : informatif tant que cette étape n'a pas été validée
-      # au moins une fois en CI (impossible à exécuter dans l'environnement de développement initial).
-      - name: Tests de bout en bout WebKit iPad (informatif)
-        continue-on-error: true
+      # WebKit (moteur de Safari), iPad Pro 11 émulé. Les tests pilotant le stylet via le
+      # protocole Chromium (@cdp) en sont exclus.
+      - name: Tests de bout en bout WebKit iPad
         run: npx playwright test --trace off --project webkit-ipad
         env:
           WEBKIT: '1'
