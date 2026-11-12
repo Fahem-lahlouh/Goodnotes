@@ -5,7 +5,10 @@ import { createPortal } from 'react-dom';
  * Panneau flottant ancré à un bouton.
  * - se ferme par Échap, par le bouton d'origine ou par un appui ailleurs ;
  * - un appui sur la page ferme le panneau SANS bloquer le tracé (l'écriture n'est jamais perdue) ;
- * - reste dans l'écran (zones de sécurité comprises) et défile si nécessaire.
+ * - reste ENTIÈREMENT dans la zone visible : il s'ouvre du côté préféré s'il y tient, sinon du côté
+ *   qui a le plus de place (au-dessus d'un bouton placé en bas de l'écran, par exemple), et défile
+ *   s'il est plus haut que la place disponible. La zone visible est celle de l'écran réel (barres de
+ *   Safari et clavier exclus, via visualViewport), pas celle de la page.
  */
 export function Popover({
   anchor,
@@ -23,22 +26,62 @@ export function Popover({
   placement?: 'below' | 'above';
 }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number; maxH: number } | null>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; w: number; maxH: number; side: 'below' | 'above' } | null>(null);
 
   useLayoutEffect(() => {
     const place = () => {
-      if (!anchor) return;
+      const el = ref.current;
+      if (!anchor || !el) return;
       const r = anchor.getBoundingClientRect();
-      const vw = window.innerWidth;
-      const vh = window.visualViewport?.height ?? window.innerHeight;
-      const w = Math.min(width, vw - 16);
-      const left = Math.max(8, Math.min(vw - w - 8, r.left + r.width / 2 - w / 2));
-      if (placement === 'below') setPos({ left, top: r.bottom + 8, maxH: vh - r.bottom - 24 });
-      else setPos({ left, bottom: window.innerHeight - r.top + 8, maxH: r.top - 24 });
+      const vv = window.visualViewport;
+      const vTop = vv ? vv.offsetTop : 0;
+      const vLeft = vv ? vv.offsetLeft : 0;
+      const vh = vv ? vv.height : window.innerHeight;
+      const vw = vv ? vv.width : window.innerWidth;
+      const margin = 8;
+      const gap = 8;
+      const w = Math.min(width, vw - margin * 2);
+      const left = Math.max(vLeft + margin, Math.min(vLeft + vw - w - margin, r.left + r.width / 2 - w / 2));
+      // Hauteur naturelle du contenu (sans limite).
+      const prevMax = el.style.maxHeight;
+      el.style.maxHeight = 'none';
+      const natural = el.scrollHeight;
+      el.style.maxHeight = prevMax;
+      const below = vTop + vh - r.bottom - gap - margin;
+      const above = r.top - vTop - gap - margin;
+      let side = placement;
+      if (side === 'below' && natural > below && above > below) side = 'above';
+      else if (side === 'above' && natural > above && below > above) side = 'below';
+      const space = side === 'below' ? below : above;
+      let maxH = Math.max(0, space);
+      let top: number;
+      if (maxH >= Math.min(natural, 140)) {
+        const h = Math.min(natural, maxH);
+        top = side === 'below' ? r.bottom + gap : r.top - gap - h;
+      } else {
+        // Ni au-dessus ni au-dessous il n'y a assez de place : on reste dans l'écran, quitte à couvrir le bouton.
+        maxH = vh - margin * 2;
+        const h = Math.min(natural, maxH);
+        top = vTop + vh - margin - h;
+      }
+      setPos({ left, top, w, maxH, side });
     };
     place();
+    // Le contenu peut changer de taille (sous-menu, réglages qui s'ouvrent) : on replace le panneau.
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => place()) : null;
+    if (ro && ref.current) for (const c of Array.from(ref.current.children)) ro.observe(c);
+    const vv = window.visualViewport;
     window.addEventListener('resize', place);
-    return () => window.removeEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    vv?.addEventListener('resize', place);
+    vv?.addEventListener('scroll', place);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+      vv?.removeEventListener('resize', place);
+      vv?.removeEventListener('scroll', place);
+    };
   }, [anchor, width, placement]);
 
   useEffect(() => {
@@ -58,14 +101,18 @@ export function Popover({
     };
   }, [anchor, onClose]);
 
-  if (!pos) return null;
   return createPortal(
     <div
       ref={ref}
-      className={`popover popover-${placement}`}
+      className={`popover popover-${pos?.side ?? placement}`}
       role="dialog"
       aria-label={label}
-      style={{ left: pos.left, top: pos.top, bottom: pos.bottom, width: Math.min(width, window.innerWidth - 16), maxHeight: Math.max(160, pos.maxH) }}
+      style={
+        pos
+          ? { left: pos.left, top: pos.top, width: pos.w, maxHeight: pos.maxH }
+          : // Premier rendu : mesure hors écran, invisible (aucun clignotement : placement avant l'affichage).
+            { left: -10000, top: 0, width: Math.min(width, window.innerWidth - 16), visibility: 'hidden' }
+      }
     >
       {children}
     </div>,

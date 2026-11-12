@@ -31,6 +31,42 @@ const zoomState = (page: Page) => page.evaluate(() => window.__calame!.engine.zo
 test.describe('Téléphone (390 × 844)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
+  test('menu « … » d’un carnet en bas de l’écran : s’ouvre au-dessus, entièrement visible', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 664 });
+    await page.goto('./');
+    await createNotebook(page, 'Anglais');
+    await page.getByRole('button', { name: 'Retour à la bibliothèque' }).click();
+    const more = page.getByRole('button', { name: 'Actions pour Anglais' });
+    await expect(more).toBeVisible();
+    // Bouton amené tout en bas de la zone visible (comme au-dessus de la barre de Safari).
+    await page.evaluate(() => {
+      const btn = document.querySelector('[aria-label="Actions pour Anglais"]')!;
+      let sc: Element | null = btn.parentElement;
+      while (sc && !(sc.scrollHeight > sc.clientHeight && /auto|scroll/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement;
+      const target = sc ?? document.scrollingElement!;
+      const r = btn.getBoundingClientRect();
+      target.scrollBy(0, r.bottom - (innerHeight - 8));
+    });
+    const bb = (await more.boundingBox())!;
+    expect(bb.y + bb.height).toBeGreaterThan(560);
+    await more.click({ noWaitAfter: true });
+    const pop = page.getByRole('dialog', { name: 'Actions pour Anglais' });
+    await expect(pop).toBeVisible();
+    const pb = (await pop.boundingBox())!;
+    expect(pb.y).toBeGreaterThanOrEqual(0);
+    expect(pb.y + pb.height).toBeLessThanOrEqual(664);
+    expect(pb.y + pb.height).toBeLessThanOrEqual(bb.y); // au-dessus du bouton
+    // Tous les choix sont visibles sans faire défiler, et utilisables.
+    for (const name of ['Ouvrir', 'Renommer', 'Mettre à la corbeille']) {
+      const item = pop.getByRole('menuitem', { name });
+      const ib = (await item.boundingBox())!;
+      expect(ib.y).toBeGreaterThanOrEqual(0);
+      expect(ib.y + ib.height).toBeLessThanOrEqual(664);
+    }
+    await pop.getByRole('menuitem', { name: 'Renommer' }).click();
+    await expect(page.getByRole('dialog', { name: 'Renommer' })).toBeVisible();
+  });
+
   test('nouveau carnet sur téléphone : fenêtre dans l’écran, bouton Fermer, contenu qui défile, Échap', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 664 }); // Safari avec ses barres
     await page.goto('./');
