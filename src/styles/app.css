@@ -1924,31 +1924,42 @@ input[type='range'] {
   .lib-side {
     display: none;
   }
+  /* Les quatre onglets se partagent la largeur : pas de zone de défilement horizontal (dans Safari,
+     une telle zone est un calque à part dont le contenu peut ne pas être redessiné). */
   .lib-tabs {
     display: flex;
-    gap: 4px;
     margin-top: 8px;
     border-bottom: 1px solid var(--border);
-    /* Les onglets défilent au lieu d'élargir la page (sinon tout l'écran se décale sur téléphone). */
     max-width: 100%;
-    overflow-x: auto;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
-  }
-  .lib-tabs::-webkit-scrollbar {
-    display: none;
   }
   .lib-tabs button {
-    flex: none;
-  }
-  .lib-tabs button {
+    flex: 1 1 auto;
+    min-width: 0;
     min-height: var(--tap);
-    padding: 0 12px;
+    padding: 0 4px;
     border: none;
     background: transparent;
     color: var(--muted);
     border-bottom: 2px solid transparent;
     margin-bottom: -1px;
+    font-size: clamp(0.82rem, 3.9vw, 1rem);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* Largeur réservée pour le libellé en gras : rien ne bouge quand l'onglet actif change. */
+  .lib-tabs button span {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .lib-tabs button span::after {
+    content: attr(data-label);
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+    font-weight: 600;
+    pointer-events: none;
   }
   .lib-tabs button.is-on {
     color: var(--text);

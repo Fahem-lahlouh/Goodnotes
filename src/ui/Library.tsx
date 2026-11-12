@@ -280,7 +280,9 @@ export function Library({ onOpen }: { onOpen: (id: string) => void }) {
           </div>
         </header>
 
-        <nav className="lib-tabs" aria-label="Sections">
+        {/* Onglets (téléphone). Recréés à chaque changement de vue : le soulignement suit toujours la
+            vue affichée, même si le navigateur ne redessine pas un élément dont seule la classe change. */}
+        <nav className="lib-tabs" aria-label="Sections" key={`tabs-${view.kind}`}>
           {(
             [
               [{ kind: 'all' }, 'Documents'],
@@ -288,11 +290,13 @@ export function Library({ onOpen }: { onOpen: (id: string) => void }) {
               [{ kind: 'trash' }, 'Corbeille'],
             ] as [View, string][]
           ).map(([v, l]) => (
-            <button key={v.kind} className={view.kind === v.kind ? 'is-on' : ''} onClick={() => setView(v)}>
-              {l}
+            <button key={v.kind} className={view.kind === v.kind ? 'is-on' : ''} aria-current={view.kind === v.kind ? 'page' : undefined} onClick={() => setView(v)}>
+              <span data-label={l}>{l}</span>
             </button>
           ))}
-          <button onClick={() => setShowStorage(true)}>Stockage</button>
+          <button onClick={() => setShowStorage(true)}>
+            <span data-label="Stockage">Stockage</span>
+          </button>
         </nav>
 
         <BackupReminder onOpen={() => setShowStorage(true)} hasNotebooks={active.length > 0} />

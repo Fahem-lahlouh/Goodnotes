@@ -31,6 +31,29 @@ const zoomState = (page: Page) => page.evaluate(() => window.__calame!.engine.zo
 test.describe('Téléphone (390 × 844)', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
+  test('onglets de la bibliothèque : l’onglet actif correspond toujours à la vue affichée, sans débordement', async ({ page }) => {
+    for (const w of [390, 320]) {
+      await page.setViewportSize({ width: w, height: 664 });
+      await page.goto('./');
+      const tabs = page.getByRole('navigation', { name: 'Sections' });
+      await expect(tabs).toBeVisible();
+      const geo = await tabs.evaluate((n) => ({ sw: n.scrollWidth, cw: n.clientWidth, cut: [...n.querySelectorAll('button')].some((b) => b.scrollWidth > b.clientWidth) }));
+      expect(geo.sw).toBeLessThanOrEqual(geo.cw);
+      expect(geo.cut).toBe(false);
+      const positions = async () => tabs.evaluate((n) => [...n.querySelectorAll('button')].map((b) => Math.round(b.getBoundingClientRect().left)).join(','));
+      const ref = await positions();
+      for (const t of ['Favoris', 'Documents', 'Corbeille', 'Documents', 'Favoris', 'Documents']) {
+        await tabs.getByRole('button', { name: t }).click();
+        await expect(page.getByRole('heading', { level: 1 })).toHaveText(t);
+        const active = tabs.locator('[aria-current="page"]');
+        await expect(active).toHaveCount(1);
+        await expect(active).toHaveText(t);
+        await expect(tabs.locator('.is-on')).toHaveText(t);
+        expect(await positions()).toBe(ref); // les onglets ne bougent pas
+      }
+    }
+  });
+
   test('menu « … » d’un carnet en bas de l’écran : s’ouvre au-dessus, entièrement visible', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 664 });
     await page.goto('./');
